@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>占いチャット デモ (モバイル優先)</title>
+  <title>占いチャット 要件対応デモ (モバイル優先)</title>
   <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React 18 (UMD) -->
@@ -23,26 +23,63 @@
   <script type="text/babel">
     const { useEffect, useMemo, useRef, useState } = React;
 
-    // ====== 設定 ======
-    const STRIPE_TEST_CHECKOUT_SUBSCRIPTION = "https://buy.stripe.com/test_XXXXXXXXXXXX"; // 月額
-    const STRIPE_TEST_CHECKOUT_POINTS_1000 = "https://buy.stripe.com/test_YYYYYYYYYYYY"; // 1000pt
-    const STRIPE_TEST_CHECKOUT_POINTS_3000 = "https://buy.stripe.com/test_ZZZZZZZZZZZZ"; // 3000pt
+    // ====== 定数/設定 ======
+    const STRIPE_TEST_CHECKOUT_SUBSCRIPTION = "https://buy.stripe.com/test_XXXXXXXXXXXX"; // 月額(ダミー)
+    const STRIPE_TEST_CHECKOUT_POINTS_1000 = "https://buy.stripe.com/test_YYYYYYYYYYYY"; // 1000pt(ダミー)
+    const STRIPE_TEST_CHECKOUT_POINTS_3000 = "https://buy.stripe.com/test_ZZZZZZZZZZZZ"; // 3000pt(ダミー)
 
-    const RANK_PRICING = {
-      S: { send: 10, open: 20, label: "S", color: "from-fuchsia-500 to-amber-400" },
-      A: { send: 7, open: 14, label: "A", color: "from-indigo-500 to-cyan-400" },
-      B: { send: 5, open: 10, label: "B", color: "from-emerald-500 to-lime-400" },
+    // 1pt=1.5円
+    const YEN_PER_POINT = 1.5; // 円換算（調整可）
+
+    // ランク: プラチナ/ゴールド/シルバー（旧 S/A/B と互換）
+    const RANK_TABLE = {
+      S: { key:'PLATINUM', jp:'プラチナ', mult:3, color:'from-slate-200 to-zinc-500' },
+      A: { key:'GOLD',     jp:'ゴールド', mult:2, color:'from-amber-200 to-orange-500' },
+      B: { key:'SILVER',   jp:'シルバー', mult:1, color:'from-neutral-200 to-gray-400' },
+      PLATINUM: { key:'PLATINUM', jp:'プラチナ', mult:3, color:'from-slate-200 to-zinc-500' },
+      GOLD:     { key:'GOLD',     jp:'ゴールド', mult:2, color:'from-amber-200 to-orange-500' },
+      SILVER:   { key:'SILVER',   jp:'シルバー', mult:1, color:'from-neutral-200 to-gray-400' },
     };
+    const getRankInfo = (rank) => RANK_TABLE[rank] || RANK_TABLE.B;
 
+    // 各鑑定士のバナー/見出し/紹介文（一覧150文字、詳細/チャット上部は最大1000文字表示）
     const ADVISORS = [
-      { id: "1", name: "霊澄(れいすみ)", rank: "S", tags: ["霊視", "スピリチュアル"], avatar: "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?w=300&q=80&auto=format" },
-      { id: "2", name: "月乃(つきの)", rank: "A", tags: ["恋愛", "相性"], avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80&auto=format" },
-      { id: "3", name: "結衣(ゆい)", rank: "B", tags: ["仕事", "転職"], avatar: "https://images.unsplash.com/photo-1520975922284-6c988d6200f3?w=300&q=80&auto=format" },
-      { id: "4", name: "和真(かずま)", rank: "A", tags: ["復縁", "運勢"], avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=300&q=80&auto=format" },
-      { id: "5", name: "千夜(ちや)", rank: "S", tags: ["タロット", "総合"], avatar: "https://images.unsplash.com/photo-1544006659-f0b21884ce1d?w=300&q=80&auto=format" },
+      { id: "1", name: "霊澄(れいすみ)", rank: "S", tags: ["霊視", "スピリチュアル"],
+        avatar: "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?w=300&q=80&auto=format",
+        banner: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=1200&q=80&auto=format",
+        headline: "視る・祓うに長けたスピリチュアル鑑定",
+        intro: "幼少期から強い霊感を持ち、これまで3,000件以上の相談に従事。現状のエネルギー状態を読み解き、好転アクションを具体化します。恋愛・復縁・人間関係で停滞している方へ、現実的に動くための一手をご提案。写真や相手の下の名前があればさらに深くリーディング可能です。スピリチュアルに偏りすぎず、客観的な視点も重視してお伝えします。" },
+      { id: "2", name: "月乃(つきの)", rank: "A", tags: ["恋愛", "相性"],
+        avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80&auto=format",
+        banner: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&q=80&auto=format",
+        headline: "相性とタイミングに特化した恋愛鑑定",
+        intro: "相性・タイミング・マインドの3軸から恋愛の“勝ち筋”を設計。片思い/復縁/結婚のご相談が中心で、メッセージは読みやすく実行しやすい手順でお返しします。LINE文面の添削も対応。相手の性格傾向から刺さる言い回しやNG行動まで具体的に提示します。" },
+      { id: "3", name: "結衣(ゆい)", rank: "B", tags: ["仕事", "転職"],
+        avatar: "https://images.unsplash.com/photo-1520975922284-6c988d6200f3?w=300&q=80&auto=format",
+        banner: "https://images.unsplash.com/photo-1487015307662-6ce6210680f1?w=1200&q=80&auto=format",
+        headline: "仕事の停滞を解くキャリアタロット",
+        intro: "人事/採用の実務経験を活かし、占術＋現実的なキャリア戦略でご提案。転職の是非、面接の相性、オファー比較、上司との向き合い方など、意思決定に必要な視点を整理します。職場の人間関係が絡むご相談も歓迎です。" },
+      { id: "4", name: "和真(かずま)", rank: "A", tags: ["復縁", "運勢"],
+        avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=300&q=80&auto=format",
+        banner: "https://images.unsplash.com/photo-1517816428104-797678c7cf0d?w=1200&q=80&auto=format",
+        headline: "復縁の確度を上げる行動設計",
+        intro: "冷却期間の取り方から再接触の文面まで、シナリオを段階設計。相手の心の動きに合わせて“今やるべきこと/やらないこと”を明確化します。短文でのご相談も歓迎。" },
+      { id: "5", name: "千夜(ちや)", rank: "S", tags: ["タロット", "総合"],
+        avatar: "https://images.unsplash.com/photo-1544006659-f0b21884ce1d?w=300&q=80&auto=format",
+        banner: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&q=80&auto=format",
+        headline: "タロット×数秘で総合アドバイス",
+        intro: "全体運から具体アクションまで丁寧に。短いメッセージでも意図を汲み、必要に応じて追加質問を投げかけながら精度を上げます。柔らかい口調ですが核心はハッキリ。初めての方にもおすすめです。" },
     ];
 
-    // ====== ストレージ ======
+    const SAMPLE_GENRES = ["恋愛", "仕事", "人間関係", "金運", "健康"]; // お悩みジャンル(サンプル5)
+
+    const FREE_TEMPLATES = [
+      "初めまして。相手との今後の関係について相談したいです。",
+      "転職のタイミングと適職について見てください。",
+      "今月の全体運と注意すべき点を教えてください。",
+    ]; // 無料テンプレート(ポイント未消費)
+
+    // ====== ストレージラッパ ======
     const storage = {
       load(key, fallback) {
         try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
@@ -51,41 +88,50 @@
     };
 
     // ====== ユーティリティ ======
-    const yen = (n) => `${Number(n).toLocaleString()} pt`;
+    const yen = (pts) => `${Math.round(pts * YEN_PER_POINT).toLocaleString()}円`;
+    const fmtPts = (n) => `${Number(n).toLocaleString()} pt`;
     const timefmt = (ms) => new Date(ms).toLocaleTimeString();
     const cls = (...v) => v.filter(Boolean).join(" ");
+    const truncate = (text, length = 150) => {
+      if (typeof text !== 'string') return '';
+      if (text.length <= length) return text;
+      return text.slice(0, length) + '…';
+    };
+    // ジャンルごとの色
+    const genreColor = (g) => {
+      if (!g) return { on:'bg-white text-gray-900 border-white', off:'bg-white/10 border-white/15' };
+      if (g.includes('恋')) return { on:'bg-pink-300 text-gray-900 border-pink-200', off:'bg-pink-500/10 border-pink-400/30 text-pink-100' };
+      if (g.includes('仕')) return { on:'bg-blue-300 text-gray-900 border-blue-200', off:'bg-blue-500/10 border-blue-400/30 text-blue-100' };
+      if (g.includes('人')) return { on:'bg-amber-300 text-gray-900 border-amber-200', off:'bg-amber-500/10 border-amber-400/30 text-amber-100' };
+      if (g.includes('金')) return { on:'bg-yellow-300 text-gray-900 border-yellow-200', off:'bg-yellow-500/10 border-yellow-400/30 text-yellow-100' };
+      if (g.includes('健')) return { on:'bg-emerald-300 text-gray-900 border-emerald-200', off:'bg-emerald-500/10 border-emerald-400/30 text-emerald-100' };
+      return { on:'bg-white text-gray-900 border-white', off:'bg-white/10 border-white/15' };
+    };
 
-    // ====== ランタイム簡易テスト（開発用） ======
-    function runDemoTests() {
-      const errors = [];
-      const expected = { S: { send: 10, open: 20 }, A: { send: 7, open: 14 }, B: { send: 5, open: 10 } };
-      Object.keys(expected).forEach((r) => {
-        const p = RANK_PRICING[r];
-        if (!p) errors.push(`RANK_PRICING[${r}] 未定義`);
-        else {
-          if (p.send !== expected[r].send) errors.push(`RANK ${r} send 想定 ${expected[r].send} 実際 ${p.send}`);
-          if (p.open !== expected[r].open) errors.push(`RANK ${r} open 想定 ${expected[r].open} 実際 ${p.open}`);
-        }
-      });
-      const ids = new Set();
-      for (const a of ADVISORS) {
-        if (!a.id || ids.has(a.id)) errors.push(`鑑定士ID重複/欠落: ${a.id}`);
-        ids.add(a.id);
-        if (!a.name) errors.push(`鑑定士名欠落: ${a.id}`);
-        if (!RANK_PRICING[a.rank]) errors.push(`未知ランク: ${a.rank}`);
-        if (!a.avatar) errors.push(`avatar欠落: ${a.id}`);
-      }
-      const sample = demoReadingText();
-      if (typeof sample !== 'string' || sample.length < 4) errors.push('demoReadingText() が不正');
-      if (errors.length) { console.groupCollapsed('[DemoTests] NG'); errors.forEach(e => console.error(e)); console.groupEnd(); }
-      else { console.info('[DemoTests] OK'); }
-    }
-    if (typeof window !== 'undefined') {
-      try { runDemoTests(); } catch (e) { console.error('[DemoTests] 実行エラー', e); }
-    }
+    // ====== 簡易テスト（console.assert） ======
+    ;(function testTruncate(){
+      console.assert(truncate('abcdef', 3) === 'abc…', 'truncate: 超過分は…付与');
+      console.assert(truncate('あいうえお', 3) === 'あいう…', 'truncate: マルチバイトでもsliceはOK');
+      console.assert(truncate('', 3) === '', 'truncate: 空文字は空');
+      console.assert(truncate(null, 3) === '', 'truncate: 非文字列は空');
+      console.assert(truncate('12345', 5) === '12345', 'truncate: ちょうどの長さは省略記号なし');
+      console.assert(truncate(undefined, 1) === '', 'truncate: undefinedでも空返却');
+    })();
+    ;(function testRank(){
+      console.assert(getRankInfo('S').mult === 3, 'S→PLATINUM mult=3');
+      console.assert(getRankInfo('A').mult === 2, 'A→GOLD mult=2');
+      console.assert(getRankInfo('B').mult === 1, 'B→SILVER mult=1');
+      console.assert(getRankInfo('PLATINUM').jp === 'プラチナ', 'label=プラチナ');
+    })();
+    ;(function testCost(){
+      const len = 10;
+      console.assert(len * getRankInfo('PLATINUM').mult === 30, 'PLATINUM 10文字=30pt');
+      console.assert(len * getRankInfo('GOLD').mult === 20, 'GOLD 10文字=20pt');
+      console.assert(len * getRankInfo('SILVER').mult === 10, 'SILVER 10文字=10pt');
+    })();
 
-    // ====== ルートコンポーネント ======
-    function CustomerDemoApp() {
+    // ====== ルート ======
+    function App() {
       const [plan, setPlan] = useState(() => storage.load('plan', 'points')); // 'subscription' | 'points'
       const [points, setPoints] = useState(() => storage.load('points', 200));
       const [subscriptionActive, setSubscriptionActive] = useState(() => storage.load('subscriptionActive', false));
@@ -94,12 +140,23 @@
       const [activeTab, setActiveTab] = useState('home');
       const [selectedAdvisorId, setSelectedAdvisorId] = useState(() => storage.load('selectedAdvisorId', null));
 
+      // 会員登録/カルテ
+      const [profile, setProfile] = useState(() => storage.load('profile', {
+        name: '', email: '', phone: '', zipcode: '', address: '',
+      }));
+      const [karte, setKarte] = useState(() => storage.load('karte', {
+        birthdate: '', zodiac: '', birthplace: '', birthtime: '',
+        genre: '', body: '',
+      }));
+
       useEffect(() => storage.save('plan', plan), [plan]);
       useEffect(() => storage.save('points', points), [points]);
       useEffect(() => storage.save('subscriptionActive', subscriptionActive), [subscriptionActive]);
       useEffect(() => storage.save('favorites', favorites), [favorites]);
       useEffect(() => storage.save('threads', threads), [threads]);
       useEffect(() => storage.save('selectedAdvisorId', selectedAdvisorId), [selectedAdvisorId]);
+      useEffect(() => storage.save('profile', profile), [profile]);
+      useEffect(() => storage.save('karte', karte), [karte]);
 
       const selectedAdvisor = useMemo(() => ADVISORS.find(a => a.id === selectedAdvisorId) || null, [selectedAdvisorId]);
 
@@ -110,50 +167,66 @@
       };
       const toggleFavorite = (advisorId) => setFavorites(prev => prev.includes(advisorId) ? prev.filter(id => id !== advisorId) : [...prev, advisorId]);
 
-      const rankingFavorites = ADVISORS.filter(a => favorites.includes(a.id));
-      const rankingPopular = useMemo(() => [...ADVISORS].sort(() => Math.random() - 0.5), [points]);
-      const rankingNew = [...ADVISORS].reverse();
-
       return (
-        <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#2e1065_0%,#0b1020_45%,#05060b_100%)] text-white">
-          {/* ヒーロー */}
-          <div className="px-4 pt-8 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center shadow-lg shadow-fuchsia-800/30">🔮</div>
-              <div>
-                <div className="text-xl font-extrabold tracking-tight">占いチャット</div>
-                <div className="text-[11px] text-white/70 -mt-0.5">あなただけの鑑定を、すぐに。</div>
-              </div>
-              <div className="ml-auto text-xs bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/10">
-                {plan === 'subscription' ? (subscriptionActive ? '月額(有効)' : '月額(未契約)') : `ポイント ${points.toLocaleString()}`}
-              </div>
-            </div>
-            <div className="mt-5 rounded-3xl p-4 bg-gradient-to-br from-indigo-600/50 via-fuchsia-600/40 to-amber-500/30 border border-white/10 shadow-xl">
-              <div className="text-2xl font-bold leading-tight">今夜、心に灯(ひ)を。<br/>気になる相手・仕事・運命の分岐、<span className="opacity-90"> プロ鑑定士</span>に相談。</div>
-              <div className="mt-3 text-sm text-white/80">画像・動画も送れて、結果はすぐに届く。月額なら消費なし、ポイントならランク別でおトクに。</div>
-              <div className="mt-4 flex gap-2">
-                <button onClick={() => setActiveTab('advisors')} className="flex-1 rounded-2xl py-3 text-sm font-semibold bg-white text-gray-900">鑑定士を探す</button>
-                <button onClick={() => setActiveTab('account')} className="rounded-2xl px-4 py-3 text-sm font-semibold bg-white/10 border border-white/20">プランを見る</button>
-              </div>
-            </div>
-          </div>
+        <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white">
+          {/* ヘッダー */}
+          <Header plan={plan} points={points} subscriptionActive={subscriptionActive} onGoPlan={()=>setActiveTab('account')} />
 
           <main className="px-4 pb-28">
             {activeTab === 'home' && (
-              <Home rankingFavorites={rankingFavorites} rankingPopular={rankingPopular} rankingNew={rankingNew} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />
+              <Home
+                favorites={favorites}
+                onFav={toggleFavorite}
+                onStartChat={startChat}
+              />
             )}
             {activeTab === 'advisors' && (
               <Advisors favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />
             )}
             {activeTab === 'chat' && (
-              <Chat plan={plan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive} advisor={selectedAdvisor} thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined} saveThread={t => setThreads(prev => ({ ...prev, [t.advisorId]: t }))} />
+              <Chat
+                plan={plan}
+                points={points}
+                setPoints={setPoints}
+                subscriptionActive={subscriptionActive}
+                advisor={selectedAdvisor}
+                thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined}
+                saveThread={t => setThreads(prev => ({ ...prev, [t.advisorId]: t }))}
+              />
             )}
             {activeTab === 'account' && (
-              <Account plan={plan} setPlan={setPlan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive} setSubscriptionActive={setSubscriptionActive} />
+              <Account
+                plan={plan} setPlan={setPlan}
+                points={points} setPoints={setPoints}
+                subscriptionActive={subscriptionActive} setSubscriptionActive={setSubscriptionActive}
+                profile={profile} setProfile={setProfile}
+                karte={karte} setKarte={setKarte}
+              />
             )}
           </main>
 
           <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+        </div>
+      );
+    }
+
+    function Header({ plan, points, subscriptionActive, onGoPlan }) {
+      return (
+        <div className="px-4 pt-8 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center shadow-lg shadow-fuchsia-800/30">🔮</div>
+            <div>
+              <div className="text-xl font-extrabold tracking-tight">占いチャット</div>
+              <div className="text-[11px] text-white/70 -mt-0.5">TOP/ランキング/相談までワンタップ</div>
+            </div>
+            <div className="ml-auto text-xs bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/10">
+              {plan === 'subscription' ? (subscriptionActive ? '月額(有効)' : '月額(未契約)') : `ポイント ${points.toLocaleString()}`}
+            </div>
+          </div>
+          {/* ヒーローのコピーは削除（要求: 不要） */}
+          <div className="mt-4 flex gap-2">
+            <button onClick={onGoPlan} className="rounded-2xl px-4 py-3 text-sm font-semibold bg-white/10 border border-white/20">プラン・会員登録</button>
+          </div>
         </div>
       );
     }
@@ -163,10 +236,10 @@
         { id: 'home', label: 'ホーム', icon: '🏠' },
         { id: 'advisors', label: '鑑定士', icon: '🧙' },
         { id: 'chat', label: '相談', icon: '💬' },
-        { id: 'account', label: 'プラン', icon: '💎' },
+        { id: 'account', label: '登録/プラン', icon: '💎' },
       ];
       return (
-        <nav className="fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)] bg-[#0b0f1a]/80 backdrop-blur border-t border-white/10">
+        <nav className="fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)] bg-[#0d1a33]/80 backdrop-blur border-t border-white/10">
           <div className="mx-auto max-w-md grid grid-cols-4">
             {items.map(it => (
               <button key={it.id} onClick={() => setActiveTab(it.id)} className={cls('py-3 flex flex-col items-center text-[11px]', activeTab === it.id ? 'text-white' : 'text-white/60')}>
@@ -179,19 +252,109 @@
       );
     }
 
-    function Home({ rankingFavorites, rankingPopular, rankingNew, favorites, onFav, onStartChat }) {
+    // ====== HOME ======
+    function Home({ favorites, onFav, onStartChat }) {
+      const [topTab, setTopTab] = useState('overall'); // overall | featured | byGenre
+      const [period, setPeriod] = useState('monthly'); // daily | weekly | monthly
+      const [selectedGenre, setSelectedGenre] = useState(SAMPLE_GENRES[0]);
+
+      const orderByPeriod = (list) => {
+        if (period === 'daily') return [...list];
+        if (period === 'weekly') return [...list].reverse();
+        return [...list].sort(() => Math.random() - 0.5);
+      };
+      const filterByGenre = (list, genre) => list.filter(a => a.tags.some(t => t.includes(genre) || genre.includes(t)));
+
+      const overallRanking = useMemo(()=>orderByPeriod(ADVISORS), [period]);
+      const byGenreFiltered = useMemo(()=>{
+        const f = filterByGenre(ADVISORS, selectedGenre);
+        return f.length ? f : ADVISORS;
+      }, [selectedGenre]);
+      const byGenreRanking = useMemo(()=>orderByPeriod(byGenreFiltered), [period, byGenreFiltered]);
+      const featuredByGenre = useMemo(()=>filterByGenre(ADVISORS, selectedGenre).slice(0, 5), [selectedGenre]);
+
+      // featured でジャンル選択してもタブ遷移しない
+      const GenreChipRow = ({compact=false, behavior='navigate'}) => (
+        <div className={compact? 'flex flex-wrap gap-2 mb-2' : 'flex flex-wrap gap-2 mb-3'}>
+          {SAMPLE_GENRES.map(g => {
+            const color = genreColor(g);
+            const active = selectedGenre===g;
+            return (
+              <button key={g} onClick={()=>{
+                setSelectedGenre(g);
+                if (behavior === 'navigate') setTopTab('byGenre');
+              }}
+                className={cls('text-xs rounded-full px-3 py-1 border transition-colors', active? color.on : color.off)}>#{g}</button>
+            );
+          })}
+        </div>
+      );
+
       return (
         <section className="space-y-6">
-          <Carousel title="注目の鑑定士" advisors={rankingPopular} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
-          <CardList title="お気に入り" advisors={rankingFavorites} onStartChat={onStartChat} onFav={onFav} favorites={favorites} emptyText="お気に入りの鑑定士を登録しましょう" />
-          <CardList title="新着の鑑定士" advisors={rankingNew} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+          {/* 一番上: お悩みのジャンル（タップでジャンル別へ遷移） */}
+          <div>
+            <h3 className="font-semibold text-white/90 mb-2">お悩みのジャンル</h3>
+            <GenreChipRow behavior="navigate" />
+          </div>
+
+          {/* TOPタブ: 綜合/注目/ジャンル別 */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3">
+            <div className="flex gap-2 mb-2">
+              {[
+                {id:'overall', label:'綜合ランキング'},
+                {id:'featured', label:'注目の鑑定士'},
+                {id:'byGenre', label:'ジャンル別ランキング'},
+              ].map(t => (
+                <button key={t.id} onClick={()=>setTopTab(t.id)} className={cls('px-3 py-2 rounded-lg text-xs', topTab===t.id ? 'bg-white text-gray-900' : 'bg-white/10 border border-white/15')}>{t.label}</button>
+              ))}
+            </div>
+
+            {/* サブタブ: overall / byGenre では期間、 featured ではジャンル切替 */}
+            {topTab !== 'featured' ? (
+              <div className="flex gap-2 mb-3">
+                {[
+                  {id:'monthly', label:'マンスリー'},
+                  {id:'weekly', label:'ウィークリー'},
+                  {id:'daily', label:'デイリー'},
+                ].map(p => (
+                  <button key={p.id} onClick={()=>setPeriod(p.id)} className={cls('px-2 py-1 rounded text-[11px]', period===p.id ? 'bg-pink-500' : 'bg-white/10')}>{p.label}</button>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-2">
+                <div className="text-[11px] text-white/60 mb-1">ジャンルを選択</div>
+                <GenreChipRow compact behavior="stay" />
+              </div>
+            )}
+
+            {topTab === 'overall' && (
+              <CardList title="綜合ランキング" advisors={overallRanking} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+            )}
+
+            {topTab === 'featured' && (
+              <Carousel title={`注目の鑑定士（${selectedGenre}）`} advisors={featuredByGenre.length? featuredByGenre : ADVISORS} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+            )}
+
+            {topTab === 'byGenre' && (
+              <>
+                <div className="text-[11px] text-white/60 mb-1">ジャンルを選択</div>
+                <GenreChipRow compact behavior="navigate" />
+                <CardList title={`${selectedGenre} ランキング`} advisors={byGenreRanking} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+              </>
+            )}
+          </div>
+
+          {/* お気に入り */}
+          <CardList title="お気に入り" advisors={ADVISORS.filter(a=>favorites.includes(a.id))} onStartChat={onStartChat} onFav={onFav} favorites={favorites} emptyText="お気に入りの鑑定士を登録しましょう" />
         </section>
       );
     }
 
     function Ribbon({ rank }) {
+      const info = getRankInfo(rank);
       return (
-        <span className={cls('text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r', RANK_PRICING[rank].color)}>RANK {rank}</span>
+        <span className={cls('text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r', info.color)}>{info.jp}</span>
       );
     }
 
@@ -201,17 +364,24 @@
           <div className="flex items-center justify-between mb-2"><h3 className="font-semibold text-white/90">{title}</h3></div>
           <div className="flex gap-3 overflow-x-auto snap-x no-scrollbar pr-2">
             {advisors.map(a => (
-              <div key={a.id} className="snap-start min-w-[220px] bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur shrink-0">
-                <div className="flex items-center gap-3">
-                  <img src={a.avatar} alt={a.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{a.name}</div>
-                    <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')} ・ <Ribbon rank={a.rank} /></div>
-                  </div>
+              <div key={a.id} className="snap-start min-w-[260px] bg-white/5 border border-white/10 rounded-2xl p-0 backdrop-blur shrink-0">
+                {/* バナー */}
+                <div className="h-28 w-full rounded-t-2xl overflow-hidden">
+                  <img src={a.banner} alt={a.name} className="w-full h-full object-cover" />
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談する</button>
-                  <button className={cls('rounded-xl py-2 text-xs font-semibold border border-white/20', favorites.includes(a.id) ? 'bg-pink-500/20 text-pink-100' : 'text-white/80')} onClick={() => onFav(a.id)}>{favorites.includes(a.id) ? '★ お気に入り' : '☆ お気に入り'}</button>
+                <div className="p-3">
+                  <div className="flex items-start gap-3">
+                    <img src={a.avatar} alt={a.name} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/20" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
+                      <div className="text-[11px] text-white/70 truncate">{a.headline}</div>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-white/80 leading-relaxed">{truncate(a.intro, 150)}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談する</button>
+                    <button className={cls('rounded-xl py-2 text-xs font-semibold border border-white/20', favorites.includes(a.id) ? 'bg-pink-500/20 text-pink-100' : 'text-white/80')} onClick={() => onFav(a.id)}>{favorites.includes(a.id) ? '★ お気に入り' : '☆ お気に入り'}</button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -221,37 +391,77 @@
     }
 
     function CardList({ title, advisors, onStartChat, onFav, favorites, emptyText }) {
+      const [detailId, setDetailId] = useState(null);
+      const adv = (id)=>advisors.find(x=>x.id===id);
       return (
         <div>
           <h3 className="font-semibold text-white/90 mb-2">{title}</h3>
-          {advisors.length === 0 ? (
+          {(!advisors || advisors.length === 0) ? (
             <div className="text-sm text-white/60">{emptyText || '該当なし'}</div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
               {advisors.map(a => (
-                <button key={a.id} onClick={() => onStartChat(a.id)} className="text-left bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur">
-                  <div className="flex items-center gap-3">
-                    <img src={a.avatar} alt={a.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
-                      <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}</div>
+                <div key={a.id} className="text-left bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur">
+                  {/* バナー */}
+                  <img src={a.banner} alt={a.name} className="w-full h-28 object-cover" />
+                  <div className="p-3">
+                    <div className="flex items-start gap-3">
+                      <img src={a.avatar} alt={a.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
+                        <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}</div>
+                        <div className="text-xs text-white/80 mt-1">{truncate(`${a.headline} — ${a.intro}`, 150)}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-white/70">相談する →</div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談する</button>
+                      <button className={cls('rounded-xl py-2 text-xs font-semibold border border-white/20', favorites.includes(a.id) ? 'bg-pink-500/20 text-pink-100' : 'text-white/80')} onClick={() => onFav(a.id)}>{favorites.includes(a.id) ? '★ お気に入り' : '☆ お気に入り'}</button>
+                      <button className="rounded-xl py-2 text-xs font-semibold bg-white/10 border border-white/20" onClick={()=>setDetailId(a.id)}>詳細を見る</button>
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
+            </div>
+          )}
+
+          {/* 詳細モーダル */}
+          {detailId && (
+            <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={()=>setDetailId(null)}>
+              <div className="w-full max-w-md bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden" onClick={(e)=>e.stopPropagation()}>
+                {adv(detailId) && (
+                  <>
+                    <img src={adv(detailId).banner} className="w-full h-32 object-cover"/>
+                    <div className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img src={adv(detailId).avatar} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20"/>
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate flex items-center gap-2">{adv(detailId).name} <Ribbon rank={adv(detailId).rank} /></div>
+                          <div className="text-[11px] text-white/70 truncate">{adv(detailId).tags.join('・')}</div>
+                        </div>
+                      </div>
+                      <h4 className="mt-3 font-semibold">{adv(detailId).headline}</h4>
+                      <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">{(adv(detailId).intro || '').slice(0,1000)}</p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" onClick={()=>{onStartChat(detailId); setDetailId(null);}}>この鑑定士に相談</button>
+                        <button className="rounded-xl py-2 text-xs font-semibold bg-white/10 border border-white/20" onClick={()=>setDetailId(null)}>閉じる</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
       );
     }
 
+    // ====== 検索/一覧 ======
     function Advisors({ favorites, onFav, onStartChat }) {
       const [q, setQ] = useState('');
       const filtered = ADVISORS.filter(a => (a.name + a.tags.join(' ') + a.rank).toLowerCase().includes(q.toLowerCase()));
       return (
         <section className="space-y-3">
-          <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-[#0b0f1a]/80 backdrop-blur">
+          <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-[#0d1a33]/80 backdrop-blur">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前・タグ・ランクで検索" className="w-full rounded-2xl bg-white/10 border border-white/20 px-4 py-3 text-sm placeholder:text-white/50" />
           </div>
           <div className="grid grid-cols-1 gap-3">
@@ -261,7 +471,7 @@
                   <img src={a.avatar} alt={a.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white/20" />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
-                    <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}・送 {RANK_PRICING[a.rank].send}・開 {RANK_PRICING[a.rank].open}</div>
+                    <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}</div>
                   </div>
                   <div className="flex flex-col gap-2">
                     <button className="rounded-xl px-3 py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談</button>
@@ -275,42 +485,43 @@
       );
     }
 
+    // ====== チャット ======
     function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, saveThread }) {
       const [text, setText] = useState('');
       const [uploads, setUploads] = useState([]);
       const fileRef = useRef(null);
       const videoRef = useRef(null);
+      const otherRef = useRef(null);
+      const [showTemplates, setShowTemplates] = useState(false);
+      const [showIntroFull, setShowIntroFull] = useState(false);
 
       if (!advisor) return <section className="py-12 text-center text-white/70">まず鑑定士を選んでください（ホームまたは「鑑定士」から）。</section>;
 
-      const pricing = RANK_PRICING[advisor.rank];
-      const consume = (need) => {
-        if (plan === 'subscription' && subscriptionActive) return true;
-        if (points < need) return false;
-        setPoints(points - need);
-        return true;
-      };
       const addMsg = (msg) => {
         const t = thread || { advisorId: advisor.id, messages: [] };
         const updated = { ...t, messages: [...t.messages, msg] };
         saveThread(updated);
       };
-      const onSend = () => {
-        const need = pricing.send;
-        if (!(plan === 'subscription' && subscriptionActive) && points < need) { alert(`ポイントが不足しています。必要: ${need}pt`); return; }
-        consume(need);
-        addMsg({ id: crypto.randomUUID(), role: 'user', text, attachments: uploads, createdAt: Date.now() });
+
+      const onSend = ({ isFreeTemplate = false } = {}) => {
+        const trimmed = text.trim();
+        if (trimmed === '' && uploads.length === 0) return;
+
+        // 料金: ランクごとの倍率（S/PLATINUM=3, A/GOLD=2, B/SILVER=1）
+        const rankMult = getRankInfo(advisor.rank).mult;
+        const need = isFreeTemplate ? 0 : trimmed.length * rankMult;
+        if (!(plan === 'subscription' && subscriptionActive) && points < need) {
+          alert(`ポイントが不足しています。必要: ${need}pt`);
+          return;
+        }
+        if (!(plan === 'subscription' && subscriptionActive)) setPoints(points - need);
+
+        addMsg({ id: crypto.randomUUID(), role: 'user', text: trimmed, attachments: uploads, createdAt: Date.now(), free: isFreeTemplate });
         setText(''); setUploads([]);
-        setTimeout(() => { addMsg({ id: crypto.randomUUID(), role: 'advisor', text: '鑑定結果が届いています。開封してください。', createdAt: Date.now(), opened: false }); }, 600);
+        // デモ返信
+        setTimeout(() => { addMsg({ id: crypto.randomUUID(), role: 'advisor', text: demoReadingText(), createdAt: Date.now(), opened: true }); }, 500);
       };
-      const onOpenResult = (msgId) => {
-        const need = pricing.open;
-        if (!(plan === 'subscription' && subscriptionActive) && points < need) { alert(`ポイントが不足しています。必要: ${need}pt`); return; }
-        consume(need);
-        const t = thread;
-        const next = t.messages.map(m => m.id === msgId ? { ...m, opened: true, text: demoReadingText() } : m);
-        saveThread({ ...t, messages: next });
-      };
+
       const onFile = (e, type) => {
         const f = e.target.files?.[0]; if (!f) return;
         const url = URL.createObjectURL(f);
@@ -320,16 +531,32 @@
 
       return (
         <section className="pb-28">
-          <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-3 bg-[#0b0f1a]/80 backdrop-blur border-b border-white/10">
-            <div className="flex items-center gap-3">
+          {/* ヘッダー（コピー文は表示しない要求に合わせて簡素化） */}
+          <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-0 bg-[#0d1a33]/80 backdrop-blur border-b border-white/10">
+            <div className="flex items-center gap-3 py-1">
               <img src={advisor.avatar} className="w-10 h-10 rounded-full ring-2 ring-white/20 object-cover" />
               <div className="min-w-0">
                 <div className="font-semibold leading-tight truncate">{advisor.name}</div>
-                <div className="text-[11px] text-white/70 flex items-center gap-2"><Ribbon rank={advisor.rank} /> {plan === 'subscription' && subscriptionActive ? <span className="text-emerald-300">月額内で使い放題</span> : <span>送 {pricing.send} / 開 {pricing.open}</span>}</div>
+                <div className="text-[11px] text-white/70 flex items-center gap-2"><Ribbon rank={advisor.rank} /> {plan === 'subscription' && subscriptionActive ? <span className="text-emerald-300">月額内で使い放題</span> : <span>1文字={getRankInfo(advisor.rank).mult}pt / {`1pt=${YEN_PER_POINT}円`}</span>}</div>
+              </div>
+            </div>
+            {/* 紹介エリア（一覧と同情報+全文表示切替） */}
+            <div className="mt-2 mb-2 border-t border-white/10 pt-2">
+              <div className="rounded-2xl overflow-hidden border border-white/10">
+                <img src={advisor.banner} className="w-full h-28 object-cover"/>
+                <div className="p-3">
+                  <div className="text-sm font-semibold">{advisor.headline}</div>
+                  <p className="text-xs text-white/80 mt-1 whitespace-pre-wrap">{showIntroFull ? (advisor.intro || '').slice(0,1000) : truncate(advisor.intro, 150)}</p>
+                  <div className="mt-2 flex gap-2">
+                    <button className="rounded-xl px-3 py-1 text-[11px] bg-white/10 border border-white/20" onClick={()=>setShowIntroFull(s=>!s)}>{showIntroFull? '閉じる' : '詳細を見る'}</button>
+                    <span className="text-[11px] text-white/60 self-center">※ 最大1000文字まで表示</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* メッセージ */}
           <div className="mt-3 space-y-3">
             {(thread?.messages ?? []).length === 0 ? (
               <div className="text-center text-white/60 mt-8 text-sm">最初のご相談内容を送ってみましょう。画像・動画・ファイルも添付できます。</div>
@@ -337,23 +564,14 @@
               <ul className="space-y-3">
                 {thread.messages.map(m => (
                   <li key={m.id} className={cls('px-2', m.role === 'user' ? 'text-right' : 'text-left')}>
-                    <div className={cls('inline-block max-w-[85%] rounded-2xl p-3 shadow-lg', m.role === 'user' ? 'bg-gradient-to-br from-indigo-600 to-fuchsia-600' : 'bg-white/8 border border-white/10')}>
-                      <div className={cls('text-[10px] mb-1', m.role === 'user' ? 'text-white/70' : 'text-white/60')}>{m.role === 'user' ? 'あなた' : '鑑定士'}・{timefmt(m.createdAt)}</div>
+                    <div className={cls('inline-block max-w-[85%] rounded-2xl p-3 shadow-lg', m.role === 'user' ? (m.free ? 'bg-green-600' : 'bg-gradient-to-br from-indigo-600 to-fuchsia-600') : 'bg-white/8 border border-white/10')}>
+                      <div className={cls('text-[10px] mb-1', m.role === 'user' ? 'text-white/70' : 'text-white/60')}>{m.role === 'user' ? (m.free ? 'あなた(無料)' : 'あなた') : '鑑定士'}・{timefmt(m.createdAt)}</div>
                       {m.attachments?.length > 0 && (
                         <div className="space-y-2 mb-2">
                           {m.attachments.map((a, idx) => <Attachment key={idx} item={a} contrast={m.role === 'user'} />)}
                         </div>
                       )}
-                      {m.role === 'advisor' && m.opened === false ? (
-                        <div className="flex items-center justify-between gap-3 text-white">
-                          <span>🔒 鑑定結果(未開封)</span>
-                          <button className="text-xs bg-white/10 border border-white/20 px-2 py-1 rounded-lg" onClick={() => onOpenResult(m.id)}>
-                            開封する{plan === 'subscription' && subscriptionActive ? '(無料)' : `(${pricing.open}pt)`}
-                          </button>
-                        </div>
-                      ) : (
-                        <p className={cls('whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'text-white' : 'text-white/90')}>{m.text}</p>
-                      )}
+                      <p className={cls('whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'text-white' : 'text-white/90')}>{m.text}</p>
                     </div>
                   </li>
                 ))}
@@ -361,6 +579,7 @@
             )}
           </div>
 
+          {/* 入力欄 */}
           <div className="fixed bottom-[56px] left-0 right-0 z-20 pb-[env(safe-area-inset-bottom)] px-4">
             {uploads.length > 0 && (
               <div className="mb-2 flex gap-2 overflow-x-auto">
@@ -372,20 +591,30 @@
                 ))}
               </div>
             )}
-            <div className="bg-[#0e1424] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
+            <div className="bg-[#111a2e] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
               <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="ご相談内容を入力…" className="flex-1 bg-transparent outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50" />
-              <div className="flex gap-1">
-                <IconBtn onClick={() => fileRef.current?.click()}>🖼</IconBtn>
-                <IconBtn onClick={() => videoRef.current?.click()}>🎬</IconBtn>
-                <label className="rounded-xl px-3 py-2 text-base bg-white/5 border border-white/10">📎
-                  <input type="file" className="hidden" onChange={(e) => onFile(e, 'file')} />
-                </label>
+              {/* ＋ボタン */}
+              <div className="relative">
+                <IconBtn onClick={() => setShowTemplates(s=>!s)}>＋</IconBtn>
+                {showTemplates && (
+                  <div className="absolute bottom-12 right-0 w-56 bg-[#0d1a33] border border-white/15 rounded-xl p-2 space-y-1 shadow-xl">
+                    <label className="w-full rounded px-3 py-2 text-left text-sm bg-white/5 border border-white/10 block cursor-pointer">🖼 画像<input type="file" accept="image/*" className="hidden" onChange={(e)=>onFile(e,'image')} /></label>
+                    <label className="w-full rounded px-3 py-2 text-left text-sm bg-white/5 border border-white/10 block cursor-pointer">🎬 動画<input type="file" accept="video/*" className="hidden" onChange={(e)=>onFile(e,'video')} /></label>
+                    <label className="w-full rounded px-3 py-2 text-left text-sm bg-white/5 border border-white/10 block cursor-pointer">📎 ファイル<input type="file" className="hidden" onChange={(e)=>onFile(e,'file')} /></label>
+                    <div className="pt-1 border-t border-white/10 text-[11px] text-white/60">無料テンプレ</div>
+                    {FREE_TEMPLATES.map((t,i)=>(
+                      <button key={i} className="w-full text-left text-xs bg-white/5 border border-white/10 rounded px-2 py-1" onClick={()=>{ setText(t); setShowTemplates(false); }}>「{t.slice(0,14)}…」を挿入</button>
+                    ))}
+                    <button className="w-full text-left text-xs bg-emerald-600 rounded px-2 py-1" onClick={()=>{ if(text.trim()==='' && uploads.length===0){ setText(FREE_TEMPLATES[0]); } onSend({isFreeTemplate:true}); setShowTemplates(false); }}>テンプレですぐ送信(無料)</button>
+                  </div>
+                )}
               </div>
-              <button onClick={onSend} disabled={text.trim() === '' && uploads.length === 0} className="rounded-xl bg-white text-gray-900 px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" title={plan === 'subscription' && subscriptionActive ? '月額内' : `送信時 ${pricing.send}pt 消費`}>送信</button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e, 'image')} />
-              <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(e) => onFile(e, 'video')} />
+              <button onClick={()=>onSend({isFreeTemplate:false})} disabled={text.trim() === '' && uploads.length === 0} className="rounded-xl bg-white text-gray-900 px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" title={plan === 'subscription' && subscriptionActive ? '月額内' : `送信時 ${text.trim().length * getRankInfo(advisor.rank).mult}pt 消費`}>送信</button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" />
+              <input ref={videoRef} type="file" accept="video/*" className="hidden" />
+              <input ref={otherRef} type="file" className="hidden" />
             </div>
-            {plan === 'points' && (<div className="mt-1 text-[11px] text-white/60">※ 送信・開封時にポイントが消費されます。</div>)}
+            {plan === 'points' && (<div className="mt-1 text-[11px] text-white/60">※ {`1pt=${YEN_PER_POINT}円`} 相当。あなたの鑑定士は <b>{getRankInfo(advisor.rank).jp}</b>（<b>1文字={getRankInfo(advisor.rank).mult}pt</b>）です。</div>)}
           </div>
         </section>
       );
@@ -402,517 +631,51 @@
       return <a href={item.url} target="_blank" rel="noreferrer" className={cls('underline break-all', base)}>{item.name}</a>;
     }
 
-    function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubscriptionActive }) {
+    // ====== プラン/会員登録/カルテ ======
+    function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubscriptionActive, profile, setProfile, karte, setKarte }) {
+      const [tab, setTab] = useState('plan'); // plan | signup | karte
+
       return (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">プラン</h2>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center justify-between"><div><div className="font-semibold">月額サブスク</div><div className="text-sm text-white/70">ポイント消費なし。相談・開封が使い放題。</div></div><Ribbon rank={'S'} /></div>
-              <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'subscription'} onChange={() => setPlan('subscription')} /> このプランにする</label></div>
-              <div className="mt-3 flex gap-2">
-                <button className={cls('rounded-xl px-4 py-2 text-sm font-semibold', subscriptionActive ? 'bg-emerald-300 text-gray-900' : 'bg-white text-gray-900')} onClick={() => { if (!subscriptionActive) { window.open(STRIPE_TEST_CHECKOUT_SUBSCRIPTION, '_blank'); alert('デモ: StripeのテストCheckoutへ遷移します。決済後は下のボタンで有効化してください。'); } }}>{subscriptionActive ? '契約中' : 'Stripeで契約(テスト)'}</button>
-                {!subscriptionActive && (<button className="rounded-xl px-3 py-2 text-xs bg-white/10 border border-white/20" onClick={() => setSubscriptionActive(true)}>← 決済済として有効化(デモ)</button>)}
-              </div>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center justify-between"><div><div className="font-semibold">ポイント制</div><div className="text-sm text-white/70">ランク別に送信/開封でポイント消費。</div></div><Ribbon rank={'A'} /></div>
-              <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'points'} onChange={() => setPlan('points')} /> このプランにする</label><span className="text-sm text-white/80">残高: <b>{yen(points)}</b></span></div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_1000, '_blank'); setPoints(points + 1000); }}>1000pt購入(テスト)</button>
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_3000, '_blank'); setPoints(points + 3000); }}>3000pt購入(テスト)</button>
-              </div>
-              <div className="mt-3 text-[11px] text-white/60">※ 実運用ではStripe Webhookで残高反映/サブスク状態をサーバーで管理してください。</div>
-              <div className="mt-4">
-                <h3 className="text-sm font-semibold mb-2">料金テーブル(ポイント制時)</h3>
-                <table className="w-full text-sm">
-                  <thead><tr className="text-left text-white/70"><th className="py-1">ランク</th><th className="py-1">送信</th><th className="py-1">開封</th></tr></thead>
-                  <tbody>
-                    {Object.entries(RANK_PRICING).map(([rank, p]) => (
-                      <tr key={rank} className="border-t border-white/10"><td className="py-1">{p.label}</td><td className="py-1">{yen(p.send)}</td><td className="py-1">{yen(p.open)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div className="text-center text-[11px] text-white/50">© {new Date().getFullYear()} Fortune Demo</div>
-        </section>
-      );
-    }
-
-    function demoReadingText() {
-      const arr = [
-        'あなたの直感が冴えています。焦らず、まずは目の前の小さな一歩を踏み出しましょう。',
-        '心のバランスが回復しつつあります。深呼吸と短い散歩が運気を整えます。',
-        '連絡は午前中が吉。素直な一言が大きな変化を生みます。',
-        '変化の波が近づいています。迷った時は、最初に浮かんだ選択が正解です。',
-      ];
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
-    // マウント
-    const root = ReactDOM.createRoot(document.getElementById('app'));
-    root.render(<CustomerDemoApp />);
-  </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>占いチャット デモ (モバイル優先)</title>
-  <!-- Tailwind (CDN) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18 (UMD) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- Babel (JSX 変換用 / ビルド不要) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    /* スクロールバー非表示（横スクロール用） */
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  </style>
-</head>
-<body class="bg-black text-white">
-  <div id="app"></div>
-
-  <script type="text/babel">
-    const { useEffect, useMemo, useRef, useState } = React;
-
-    // ====== 設定 ======
-    const STRIPE_TEST_CHECKOUT_SUBSCRIPTION = "https://buy.stripe.com/test_XXXXXXXXXXXX"; // 月額
-    const STRIPE_TEST_CHECKOUT_POINTS_1000 = "https://buy.stripe.com/test_YYYYYYYYYYYY"; // 1000pt
-    const STRIPE_TEST_CHECKOUT_POINTS_3000 = "https://buy.stripe.com/test_ZZZZZZZZZZZZ"; // 3000pt
-
-    const RANK_PRICING = {
-      S: { send: 10, open: 20, label: "S", color: "from-fuchsia-500 to-amber-400" },
-      A: { send: 7, open: 14, label: "A", color: "from-indigo-500 to-cyan-400" },
-      B: { send: 5, open: 10, label: "B", color: "from-emerald-500 to-lime-400" },
-    };
-
-    const ADVISORS = [
-      { id: "1", name: "霊澄(れいすみ)", rank: "S", tags: ["霊視", "スピリチュアル"], avatar: "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?w=300&q=80&auto=format" },
-      { id: "2", name: "月乃(つきの)", rank: "A", tags: ["恋愛", "相性"], avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=300&q=80&auto=format" },
-      { id: "3", name: "結衣(ゆい)", rank: "B", tags: ["仕事", "転職"], avatar: "https://images.unsplash.com/photo-1520975922284-6c988d6200f3?w=300&q=80&auto=format" },
-      { id: "4", name: "和真(かずま)", rank: "A", tags: ["復縁", "運勢"], avatar: "https://images.unsplash.com/photo-1527980965255-d3b416303d12?w=300&q=80&auto=format" },
-      { id: "5", name: "千夜(ちや)", rank: "S", tags: ["タロット", "総合"], avatar: "https://images.unsplash.com/photo-1544006659-f0b21884ce1d?w=300&q=80&auto=format" },
-    ];
-
-    // ====== ストレージ ======
-    const storage = {
-      load(key, fallback) {
-        try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
-      },
-      save(key, value) { localStorage.setItem(key, JSON.stringify(value)); },
-    };
-
-    // ====== ユーティリティ ======
-    const yen = (n) => `${Number(n).toLocaleString()} pt`;
-    const timefmt = (ms) => new Date(ms).toLocaleTimeString();
-    const cls = (...v) => v.filter(Boolean).join(" ");
-
-    // ====== ランタイム簡易テスト（開発用） ======
-    function runDemoTests() {
-      const errors = [];
-      const expected = { S: { send: 10, open: 20 }, A: { send: 7, open: 14 }, B: { send: 5, open: 10 } };
-      Object.keys(expected).forEach((r) => {
-        const p = RANK_PRICING[r];
-        if (!p) errors.push(`RANK_PRICING[${r}] 未定義`);
-        else {
-          if (p.send !== expected[r].send) errors.push(`RANK ${r} send 想定 ${expected[r].send} 実際 ${p.send}`);
-          if (p.open !== expected[r].open) errors.push(`RANK ${r} open 想定 ${expected[r].open} 実際 ${p.open}`);
-        }
-      });
-      const ids = new Set();
-      for (const a of ADVISORS) {
-        if (!a.id || ids.has(a.id)) errors.push(`鑑定士ID重複/欠落: ${a.id}`);
-        ids.add(a.id);
-        if (!a.name) errors.push(`鑑定士名欠落: ${a.id}`);
-        if (!RANK_PRICING[a.rank]) errors.push(`未知ランク: ${a.rank}`);
-        if (!a.avatar) errors.push(`avatar欠落: ${a.id}`);
-      }
-      const sample = demoReadingText();
-      if (typeof sample !== 'string' || sample.length < 4) errors.push('demoReadingText() が不正');
-      if (errors.length) { console.groupCollapsed('[DemoTests] NG'); errors.forEach(e => console.error(e)); console.groupEnd(); }
-      else { console.info('[DemoTests] OK'); }
-    }
-    if (typeof window !== 'undefined') {
-      try { runDemoTests(); } catch (e) { console.error('[DemoTests] 実行エラー', e); }
-    }
-
-    // ====== ルートコンポーネント ======
-    function CustomerDemoApp() {
-      const [plan, setPlan] = useState(() => storage.load('plan', 'points')); // 'subscription' | 'points'
-      const [points, setPoints] = useState(() => storage.load('points', 200));
-      const [subscriptionActive, setSubscriptionActive] = useState(() => storage.load('subscriptionActive', false));
-      const [favorites, setFavorites] = useState(() => storage.load('favorites', []));
-      const [threads, setThreads] = useState(() => storage.load('threads', {})); // advisorId -> {messages}
-      const [activeTab, setActiveTab] = useState('home');
-      const [selectedAdvisorId, setSelectedAdvisorId] = useState(() => storage.load('selectedAdvisorId', null));
-
-      useEffect(() => storage.save('plan', plan), [plan]);
-      useEffect(() => storage.save('points', points), [points]);
-      useEffect(() => storage.save('subscriptionActive', subscriptionActive), [subscriptionActive]);
-      useEffect(() => storage.save('favorites', favorites), [favorites]);
-      useEffect(() => storage.save('threads', threads), [threads]);
-      useEffect(() => storage.save('selectedAdvisorId', selectedAdvisorId), [selectedAdvisorId]);
-
-      const selectedAdvisor = useMemo(() => ADVISORS.find(a => a.id === selectedAdvisorId) || null, [selectedAdvisorId]);
-
-      const startChat = (advisorId) => {
-        if (!threads[advisorId]) setThreads(prev => ({ ...prev, [advisorId]: { advisorId, messages: [] } }));
-        setSelectedAdvisorId(advisorId);
-        setActiveTab('chat');
-      };
-      const toggleFavorite = (advisorId) => setFavorites(prev => prev.includes(advisorId) ? prev.filter(id => id !== advisorId) : [...prev, advisorId]);
-
-      const rankingFavorites = ADVISORS.filter(a => favorites.includes(a.id));
-      const rankingPopular = useMemo(() => [...ADVISORS].sort(() => Math.random() - 0.5), [points]);
-      const rankingNew = [...ADVISORS].reverse();
-
-      return (
-        <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#2e1065_0%,#0b1020_45%,#05060b_100%)] text-white">
-          {/* ヒーロー */}
-          <div className="px-4 pt-8 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center shadow-lg shadow-fuchsia-800/30">🔮</div>
-              <div>
-                <div className="text-xl font-extrabold tracking-tight">占いチャット</div>
-                <div className="text-[11px] text-white/70 -mt-0.5">あなただけの鑑定を、すぐに。</div>
-              </div>
-              <div className="ml-auto text-xs bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/10">
-                {plan === 'subscription' ? (subscriptionActive ? '月額(有効)' : '月額(未契約)') : `ポイント ${points.toLocaleString()}`}
-              </div>
-            </div>
-            <div className="mt-5 rounded-3xl p-4 bg-gradient-to-br from-indigo-600/50 via-fuchsia-600/40 to-amber-500/30 border border-white/10 shadow-xl">
-              <div className="text-2xl font-bold leading-tight">今夜、心に灯(ひ)を。<br/>気になる相手・仕事・運命の分岐、<span className="opacity-90"> プロ鑑定士</span>に相談。</div>
-              <div className="mt-3 text-sm text-white/80">画像・動画も送れて、結果はすぐに届く。月額なら消費なし、ポイントならランク別でおトクに。</div>
-              <div className="mt-4 flex gap-2">
-                <button onClick={() => setActiveTab('advisors')} className="flex-1 rounded-2xl py-3 text-sm font-semibold bg-white text-gray-900">鑑定士を探す</button>
-                <button onClick={() => setActiveTab('account')} className="rounded-2xl px-4 py-3 text-sm font-semibold bg-white/10 border border-white/20">プランを見る</button>
-              </div>
-            </div>
-          </div>
-
-          <main className="px-4 pb-28">
-            {activeTab === 'home' && (
-              <Home rankingFavorites={rankingFavorites} rankingPopular={rankingPopular} rankingNew={rankingNew} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />
-            )}
-            {activeTab === 'advisors' && (
-              <Advisors favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />
-            )}
-            {activeTab === 'chat' && (
-              <Chat plan={plan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive} advisor={selectedAdvisor} thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined} saveThread={t => setThreads(prev => ({ ...prev, [t.advisorId]: t }))} />
-            )}
-            {activeTab === 'account' && (
-              <Account plan={plan} setPlan={setPlan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive} setSubscriptionActive={setSubscriptionActive} />
-            )}
-          </main>
-
-          <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-        </div>
-      );
-    }
-
-    function BottomNav({ activeTab, setActiveTab }) {
-      const items = [
-        { id: 'home', label: 'ホーム', icon: '🏠' },
-        { id: 'advisors', label: '鑑定士', icon: '🧙' },
-        { id: 'chat', label: '相談', icon: '💬' },
-        { id: 'account', label: 'プラン', icon: '💎' },
-      ];
-      return (
-        <nav className="fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)] bg-[#0b0f1a]/80 backdrop-blur border-t border-white/10">
-          <div className="mx-auto max-w-md grid grid-cols-4">
-            {items.map(it => (
-              <button key={it.id} onClick={() => setActiveTab(it.id)} className={cls('py-3 flex flex-col items-center text-[11px]', activeTab === it.id ? 'text-white' : 'text-white/60')}>
-                <div className="text-base leading-none">{it.icon}</div>
-                <div className="mt-1">{it.label}</div>
-              </button>
+          <div className="flex gap-2">
+            {[
+              {id:'plan', label:'プラン'},
+              {id:'signup', label:'会員登録'},
+              {id:'karte', label:'カルテ'},
+            ].map(t => (
+              <button key={t.id} onClick={()=>setTab(t.id)} className={cls('px-3 py-2 rounded-lg text-xs', tab===t.id ? 'bg-white text-gray-900' : 'bg-white/10 border border-white/15')}>{t.label}</button>
             ))}
           </div>
-        </nav>
-      );
-    }
 
-    function Home({ rankingFavorites, rankingPopular, rankingNew, favorites, onFav, onStartChat }) {
-      return (
-        <section className="space-y-6">
-          <Carousel title="注目の鑑定士" advisors={rankingPopular} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
-          <CardList title="お気に入り" advisors={rankingFavorites} onStartChat={onStartChat} onFav={onFav} favorites={favorites} emptyText="お気に入りの鑑定士を登録しましょう" />
-          <CardList title="新着の鑑定士" advisors={rankingNew} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
-        </section>
-      );
-    }
-
-    function Ribbon({ rank }) {
-      return (
-        <span className={cls('text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r', RANK_PRICING[rank].color)}>RANK {rank}</span>
-      );
-    }
-
-    function Carousel({ title, advisors, onStartChat, onFav, favorites }) {
-      return (
-        <div>
-          <div className="flex items-center justify-between mb-2"><h3 className="font-semibold text-white/90">{title}</h3></div>
-          <div className="flex gap-3 overflow-x-auto snap-x no-scrollbar pr-2">
-            {advisors.map(a => (
-              <div key={a.id} className="snap-start min-w-[220px] bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur shrink-0">
-                <div className="flex items-center gap-3">
-                  <img src={a.avatar} alt={a.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{a.name}</div>
-                    <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')} ・ <Ribbon rank={a.rank} /></div>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談する</button>
-                  <button className={cls('rounded-xl py-2 text-xs font-semibold border border-white/20', favorites.includes(a.id) ? 'bg-pink-500/20 text-pink-100' : 'text-white/80')} onClick={() => onFav(a.id)}>{favorites.includes(a.id) ? '★ お気に入り' : '☆ お気に入り'}</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    function CardList({ title, advisors, onStartChat, onFav, favorites, emptyText }) {
-      return (
-        <div>
-          <h3 className="font-semibold text-white/90 mb-2">{title}</h3>
-          {advisors.length === 0 ? (
-            <div className="text-sm text-white/60">{emptyText || '該当なし'}</div>
-          ) : (
+          {tab==='plan' && (
             <div className="grid grid-cols-1 gap-3">
-              {advisors.map(a => (
-                <button key={a.id} onClick={() => onStartChat(a.id)} className="text-left bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur">
-                  <div className="flex items-center gap-3">
-                    <img src={a.avatar} alt={a.name} className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
-                      <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}</div>
-                    </div>
-                    <div className="text-xs text-white/70">相談する →</div>
-                  </div>
-                </button>
-              ))}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div className="flex items-center justify-between"><div><div className="font-semibold">月額サブスク</div><div className="text-sm text-white/70">ポイント消費なし。相談し放題。</div></div><Ribbon rank={'S'} /></div>
+                <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'subscription'} onChange={() => setPlan('subscription')} /> このプランにする</label></div>
+                <div className="mt-3 flex gap-2">
+                  <button className={cls('rounded-xl px-4 py-2 text-sm font-semibold', subscriptionActive ? 'bg-emerald-300 text-gray-900' : 'bg-white text-gray-900')} onClick={() => { if (!subscriptionActive) { window.open(STRIPE_TEST_CHECKOUT_SUBSCRIPTION, '_blank'); alert('デモ: StripeのテストCheckoutへ遷移します。決済後は下のボタンで有効化してください。'); } }}>{subscriptionActive ? '契約中' : 'Stripeで契約(テスト)'}</button>
+                  {!subscriptionActive && (<button className="rounded-xl px-3 py-2 text-xs bg-white/10 border border-white/20" onClick={() => setSubscriptionActive(true)}>← 決済済として有効化(デモ)</button>)}
+                </div>
+              </div>
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div className="flex items-center justify-between"><div><div className="font-semibold">ポイント制</div><div className="text-sm text-white/70">1pt={YEN_PER_POINT}円。文字数×ランク倍率で消費。</div></div><Ribbon rank={'A'} /></div>
+                <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'points'} onChange={() => setPlan('points')} /> このプランにする</label><span className="text-sm text-white/80">残高: <b>{fmtPts(points)}</b>（約{yen(points)}）</span></div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_1000, '_blank'); setPoints(points + 1000); }}>1000pt購入(約{yen(1000)})</button>
+                  <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_3000, '_blank'); setPoints(points + 3000); }}>3000pt購入(約{yen(3000)})</button>
+                </div>
+                <div className="mt-3 text-[11px] text-white/60">※ 実運用ではStripe Webhookで残高反映/サブスク状態をサーバーで管理してください。</div>
+                <div className="mt-4 text-xs text-white/70">価格例: 660円 ≒ 440pt</div>
+              </div>
             </div>
           )}
-        </div>
-      );
-    }
 
-    function Advisors({ favorites, onFav, onStartChat }) {
-      const [q, setQ] = useState('');
-      const filtered = ADVISORS.filter(a => (a.name + a.tags.join(' ') + a.rank).toLowerCase().includes(q.toLowerCase()));
-      return (
-        <section className="space-y-3">
-          <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-[#0b0f1a]/80 backdrop-blur">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前・タグ・ランクで検索" className="w-full rounded-2xl bg-white/10 border border-white/20 px-4 py-3 text-sm placeholder:text-white/50" />
-          </div>
-          <div className="grid grid-cols-1 gap-3">
-            {filtered.map(a => (
-              <div key={a.id} className="bg-white/5 border border-white/10 rounded-2xl p-3 backdrop-blur">
-                <div className="flex items-center gap-3">
-                  <img src={a.avatar} alt={a.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white/20" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate flex items-center gap-2">{a.name} <Ribbon rank={a.rank} /></div>
-                    <div className="text-[11px] text-white/70 truncate">{a.tags.join('・')}・送 {RANK_PRICING[a.rank].send}・開 {RANK_PRICING[a.rank].open}</div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <button className="rounded-xl px-3 py-2 text-xs font-semibold bg-white text-gray-900" onClick={() => onStartChat(a.id)}>相談</button>
-                    <button className="rounded-xl px-3 py-2 text-[11px] border border-white/20 text-white/80" onClick={() => onFav(a.id)}>{favorites.includes(a.id) ? '★ お気に入り' : '☆ お気に入り'}</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      );
-    }
-
-    function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, saveThread }) {
-      const [text, setText] = useState('');
-      const [uploads, setUploads] = useState([]);
-      const fileRef = useRef(null);
-      const videoRef = useRef(null);
-
-      if (!advisor) return <section className="py-12 text-center text-white/70">まず鑑定士を選んでください（ホームまたは「鑑定士」から）。</section>;
-
-      const pricing = RANK_PRICING[advisor.rank];
-      const consume = (need) => {
-        if (plan === 'subscription' && subscriptionActive) return true;
-        if (points < need) return false;
-        setPoints(points - need);
-        return true;
-      };
-      const addMsg = (msg) => {
-        const t = thread || { advisorId: advisor.id, messages: [] };
-        const updated = { ...t, messages: [...t.messages, msg] };
-        saveThread(updated);
-      };
-      const onSend = () => {
-        const need = pricing.send;
-        if (!(plan === 'subscription' && subscriptionActive) && points < need) { alert(`ポイントが不足しています。必要: ${need}pt`); return; }
-        consume(need);
-        addMsg({ id: crypto.randomUUID(), role: 'user', text, attachments: uploads, createdAt: Date.now() });
-        setText(''); setUploads([]);
-        setTimeout(() => { addMsg({ id: crypto.randomUUID(), role: 'advisor', text: '鑑定結果が届いています。開封してください。', createdAt: Date.now(), opened: false }); }, 600);
-      };
-      const onOpenResult = (msgId) => {
-        const need = pricing.open;
-        if (!(plan === 'subscription' && subscriptionActive) && points < need) { alert(`ポイントが不足しています。必要: ${need}pt`); return; }
-        consume(need);
-        const t = thread;
-        const next = t.messages.map(m => m.id === msgId ? { ...m, opened: true, text: demoReadingText() } : m);
-        saveThread({ ...t, messages: next });
-      };
-      const onFile = (e, type) => {
-        const f = e.target.files?.[0]; if (!f) return;
-        const url = URL.createObjectURL(f);
-        setUploads(prev => [...prev, { type, url, name: f.name }]);
-        e.target.value = '';
-      };
-
-      return (
-        <section className="pb-28">
-          <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-3 bg-[#0b0f1a]/80 backdrop-blur border-b border-white/10">
-            <div className="flex items-center gap-3">
-              <img src={advisor.avatar} className="w-10 h-10 rounded-full ring-2 ring-white/20 object-cover" />
-              <div className="min-w-0">
-                <div className="font-semibold leading-tight truncate">{advisor.name}</div>
-                <div className="text-[11px] text-white/70 flex items-center gap-2"><Ribbon rank={advisor.rank} /> {plan === 'subscription' && subscriptionActive ? <span className="text-emerald-300">月額内で使い放題</span> : <span>送 {pricing.send} / 開 {pricing.open}</span>}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-3 space-y-3">
-            {(thread?.messages ?? []).length === 0 ? (
-              <div className="text-center text-white/60 mt-8 text-sm">最初のご相談内容を送ってみましょう。画像・動画・ファイルも添付できます。</div>
-            ) : (
-              <ul className="space-y-3">
-                {thread.messages.map(m => (
-                  <li key={m.id} className={cls('px-2', m.role === 'user' ? 'text-right' : 'text-left')}>
-                    <div className={cls('inline-block max-w-[85%] rounded-2xl p-3 shadow-lg', m.role === 'user' ? 'bg-gradient-to-br from-indigo-600 to-fuchsia-600' : 'bg-white/8 border border-white/10')}>
-                      <div className={cls('text-[10px] mb-1', m.role === 'user' ? 'text-white/70' : 'text-white/60')}>{m.role === 'user' ? 'あなた' : '鑑定士'}・{timefmt(m.createdAt)}</div>
-                      {m.attachments?.length > 0 && (
-                        <div className="space-y-2 mb-2">
-                          {m.attachments.map((a, idx) => <Attachment key={idx} item={a} contrast={m.role === 'user'} />)}
-                        </div>
-                      )}
-                      {m.role === 'advisor' && m.opened === false ? (
-                        <div className="flex items-center justify-between gap-3 text-white">
-                          <span>🔒 鑑定結果(未開封)</span>
-                          <button className="text-xs bg-white/10 border border-white/20 px-2 py-1 rounded-lg" onClick={() => onOpenResult(m.id)}>
-                            開封する{plan === 'subscription' && subscriptionActive ? '(無料)' : `(${pricing.open}pt)`}
-                          </button>
-                        </div>
-                      ) : (
-                        <p className={cls('whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'text-white' : 'text-white/90')}>{m.text}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="fixed bottom-[56px] left-0 right-0 z-20 pb-[env(safe-area-inset-bottom)] px-4">
-            {uploads.length > 0 && (
-              <div className="mb-2 flex gap-2 overflow-x-auto">
-                {uploads.map((u, idx) => (
-                  <div key={idx} className="min-w-[140px] border border-white/15 bg-white/5 rounded-2xl p-2 text-xs flex items-center gap-2">
-                    <span className="opacity-80">{u.type === 'image' ? '🖼' : u.type === 'video' ? '🎬' : '📎'}</span>
-                    <span className="truncate max-w-[96px]" title={u.name}>{u.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="bg-[#0e1424] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
-              <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="ご相談内容を入力…" className="flex-1 bg-transparent outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50" />
-              <div className="flex gap-1">
-                <IconBtn onClick={() => fileRef.current?.click()}>🖼</IconBtn>
-                <IconBtn onClick={() => videoRef.current?.click()}>🎬</IconBtn>
-                <label className="rounded-xl px-3 py-2 text-base bg-white/5 border border-white/10">📎
-                  <input type="file" className="hidden" onChange={(e) => onFile(e, 'file')} />
-                </label>
-              </div>
-              <button onClick={onSend} disabled={text.trim() === '' && uploads.length === 0} className="rounded-xl bg-white text-gray-900 px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" title={plan === 'subscription' && subscriptionActive ? '月額内' : `送信時 ${pricing.send}pt 消費`}>送信</button>
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e, 'image')} />
-              <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={(e) => onFile(e, 'video')} />
-            </div>
-            {plan === 'points' && (<div className="mt-1 text-[11px] text-white/60">※ 送信・開封時にポイントが消費されます。</div>)}
-          </div>
-        </section>
-      );
-    }
-
-    function IconBtn({ children, onClick }) {
-      return <button onClick={onClick} className="rounded-xl px-3 py-2 text-base bg-white/5 border border-white/10">{children}</button>;
-    }
-
-    function Attachment({ item, contrast }) {
-      const base = contrast ? 'opacity-95' : 'opacity-90';
-      if (item.type === 'image') return <img src={item.url} alt={item.name} className={cls('rounded-xl max-h-48', base)} />;
-      if (item.type === 'video') return <video src={item.url} controls className={cls('rounded-xl max-h-48', base)} />;
-      return <a href={item.url} target="_blank" rel="noreferrer" className={cls('underline break-all', base)}>{item.name}</a>;
-    }
-
-    function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubscriptionActive }) {
-      return (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">プラン</h2>
-          <div className="grid grid-cols-1 gap-3">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center justify-between"><div><div className="font-semibold">月額サブスク</div><div className="text-sm text-white/70">ポイント消費なし。相談・開封が使い放題。</div></div><Ribbon rank={'S'} /></div>
-              <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'subscription'} onChange={() => setPlan('subscription')} /> このプランにする</label></div>
-              <div className="mt-3 flex gap-2">
-                <button className={cls('rounded-xl px-4 py-2 text-sm font-semibold', subscriptionActive ? 'bg-emerald-300 text-gray-900' : 'bg-white text-gray-900')} onClick={() => { if (!subscriptionActive) { window.open(STRIPE_TEST_CHECKOUT_SUBSCRIPTION, '_blank'); alert('デモ: StripeのテストCheckoutへ遷移します。決済後は下のボタンで有効化してください。'); } }}>{subscriptionActive ? '契約中' : 'Stripeで契約(テスト)'}</button>
-                {!subscriptionActive && (<button className="rounded-xl px-3 py-2 text-xs bg-white/10 border border-white/20" onClick={() => setSubscriptionActive(true)}>← 決済済として有効化(デモ)</button>)}
-              </div>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center justify-between"><div><div className="font-semibold">ポイント制</div><div className="text-sm text-white/70">ランク別に送信/開封でポイント消費。</div></div><Ribbon rank={'A'} /></div>
-              <div className="mt-3 flex items-center gap-3"><label className="flex items-center gap-2 text-sm"><input type="radio" checked={plan === 'points'} onChange={() => setPlan('points')} /> このプランにする</label><span className="text-sm text-white/80">残高: <b>{yen(points)}</b></span></div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_1000, '_blank'); setPoints(points + 1000); }}>1000pt購入(テスト)</button>
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_3000, '_blank'); setPoints(points + 3000); }}>3000pt購入(テスト)</button>
-              </div>
-              <div className="mt-3 text-[11px] text-white/60">※ 実運用ではStripe Webhookで残高反映/サブスク状態をサーバーで管理してください。</div>
-              <div className="mt-4">
-                <h3 className="text-sm font-semibold mb-2">料金テーブル(ポイント制時)</h3>
-                <table className="w-full text-sm">
-                  <thead><tr className="text-left text-white/70"><th className="py-1">ランク</th><th className="py-1">送信</th><th className="py-1">開封</th></tr></thead>
-                  <tbody>
-                    {Object.entries(RANK_PRICING).map(([rank, p]) => (
-                      <tr key={rank} className="border-t border-white/10"><td className="py-1">{p.label}</td><td className="py-1">{yen(p.send)}</td><td className="py-1">{yen(p.open)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div className="text-center text-[11px] text-white/50">© {new Date().getFullYear()} Fortune Demo</div>
-        </section>
-      );
-    }
-
-    function demoReadingText() {
-      const arr = [
-        'あなたの直感が冴えています。焦らず、まずは目の前の小さな一歩を踏み出しましょう。',
-        '心のバランスが回復しつつあります。深呼吸と短い散歩が運気を整えます。',
-        '連絡は午前中が吉。素直な一言が大きな変化を生みます。',
-        '変化の波が近づいています。迷った時は、最初に浮かんだ選択が正解です。',
-      ];
-      return arr[Math.floor(Math.random() * arr.length)];
-    }
-
-    // マウント
-    const root = ReactDOM.createRoot(document.getElementById('app'));
-    root.render(<CustomerDemoApp />);
-  </script>
-</body>
-</html>
+          {tab==='signup' && (
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+              <h2 className="text-lg font-semibold">会員登録</h2>
+              <Input label="名前" value={profile.name} onChange={v=>setProfile({...profile, name:v})} />
+              <Input label="メールアドレス" value={profile.email} onChange={v=>setProfile({...profile, email:v})} type="email" />
+              <Input label="電話番号" value={profile.phone} onChange={v=>setProfile({...profile, phone:v})} />
+              <div className="grid grid-cols-3 gap-2">
+                <Input label="郵便番号" value={profile.zipcode} onChange={v=>setProfile({...profile, zipcode:v})} />
+               
