@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* 画面全幅にする上書き（必要に応じて） */
+@layer base {
+  html, body, #root { height: 100%; }
+  #root { width: 100%; max-width: none; margin: 0; padding: 0; }
+  body { margin: 0; }
+}
+
+/* admin のタブ用ユーティリティ（任意・見た目維持用） */
+@layer components {
+  .tab-label { 
+    @apply bg-white/10 border border-white/20 text-white transition-colors duration-200 rounded-lg px-4 py-2 text-sm;
+  }
+  .tab-selected { 
+    @apply bg-white text-gray-900 font-semibold border-white;
+  }
+  .logged-in-header { background-color: #0d1a33; padding: 1rem 1rem 0.5rem; }
+  .tab-label { @apply bg-white/10 border border-white/20 text-white transition-colors duration-200; }
+  .tab-selected { @apply bg-white text-gray-900 font-semibold border-white; }
+  .unopened-msg {
+    text-align: center; background-color: #2b3a62; border: 1px dashed #6d85c8;
+    color: #c8d3ee; padding: 0.75rem; border-radius: 1rem; cursor: pointer;
+  }
+  .sejutsu-panel {
+    background-color: rgba(245,158,11,.1);
+    border: 1px solid rgba(245,158,11,.5);
+    padding: 1rem; border-radius: .75rem; margin-top: .5rem;
+    display: none; /* Reactで開くときは className="... block" を追加 */
+  }
+  .dm-modal-content {
+    background-color: #0d1a33; border: 1px solid rgba(255,255,255,.1);
+    border-radius: 1rem; width: 90%; max-width: 500px; max-height: 80vh; overflow: hidden;
+  }
+}
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .dm-modal-overlay {
+    position: fixed; inset: 0; background-color: rgba(0,0,0,.7);
+    backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center;
+  }
+}
