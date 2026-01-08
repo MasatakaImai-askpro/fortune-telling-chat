@@ -30,10 +30,14 @@ pipelines:
             #   --exclude=backend/.venv
             #   .
 
-            - tar -czf app.tar.gz --exclude-vcs --exclude=app.tar.gz --exclude=frontend/node_modules --exclude=backend/.venv .
-            - echo "tar exit code=$?"
-            - ls -lah app.tar.gz
+            # - tar -czf app.tar.gz --exclude-vcs --exclude=app.tar.gz --exclude=frontend/node_modules --exclude=backend/.venv .
+            # - echo "tar exit code=$?"
+            # - ls -lah app.tar.gz
 
+            - mkdir -p /tmp/pkg
+            - tar -czf /tmp/pkg/app.tar.gz --exclude-vcs --exclude=frontend/node_modules --exclude=backend/.venv .
+            - mv /tmp/pkg/app.tar.gz app.tar.gz
+            - ls -lah app.tar.gz
 
             # 4) Herokuへデプロイ
             - pipe: atlassian/heroku-deploy:0.1.1
