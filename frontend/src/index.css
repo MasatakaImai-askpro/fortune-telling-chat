@@ -38,6 +38,6 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .dm-modal-overlay {
     position: fixed; inset: 0; background-color: rgba(0,0,0,.7);
-    backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px); z-index: 50; align-items: center; justify-content: center;
   }
 }
