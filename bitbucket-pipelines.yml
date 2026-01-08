@@ -23,12 +23,17 @@ pipelines:
             - cp -R frontend/dist/* backend/static/frontend/
 
             # 3) IMPORTANT: git archive ではなく、作業ツリーを丸ごと tar する（生成物を含めるため）
-            - tar -czf app.tar.gz
-              --exclude-vcs
-              --exclude=app.tar.gz
-              --exclude=frontend/node_modules
-              --exclude=backend/.venv
-              .
+            # - tar -czf app.tar.gz
+            #   --exclude-vcs
+            #   --exclude=app.tar.gz
+            #   --exclude=frontend/node_modules
+            #   --exclude=backend/.venv
+            #   .
+
+            - tar -czf app.tar.gz --exclude-vcs --exclude=app.tar.gz --exclude=frontend/node_modules --exclude=backend/.venv .
+            - echo "tar exit code=$?"
+            - ls -lah app.tar.gz
+
 
             # 4) Herokuへデプロイ
             - pipe: atlassian/heroku-deploy:0.1.1
