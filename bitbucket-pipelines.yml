@@ -8,30 +8,33 @@ pipelines:
           name: Build & Deploy to Heroku (Django + React)
           image: atlassian/default-image:4
           caches:
-            - pip
             - node
           script:
+            - echo "### PIPELINE TMP-PKG VERSION ###"
+            - pwd
+            - ls -lah
+
             # 1) フロント build
             - cd frontend
             - npm ci
             - npm run build
             - cd ..
 
-            # 2) dist を Django の static 配下へコピー（配信したい場所に合わせて調整OK）
+            # 2) dist を Django の static 配下へコピー
             - rm -rf backend/static/frontend
             - mkdir -p backend/static/frontend
             - cp -R frontend/dist/* backend/static/frontend/
 
-            # 3) IMPORTANT: git archive ではなく、作業ツリーを丸ごと tar する（生成物を含めるため）
-            - echo "### USING /tmp/pkg VERSION ###"
-            - pwd
-            - ls -lah
+            # 3) tar作成（自己参照回避で /tmp に出す）
             - mkdir -p /tmp/pkg
             - tar -czf /tmp/pkg/app.tar.gz --exclude-vcs --exclude=frontend/node_modules --exclude=backend/.venv .
             - mv /tmp/pkg/app.tar.gz app.tar.gz
             - ls -lah app.tar.gz
 
-            # 4) Herokuへデプロイ
+            # 4) ルートの requirements.txt / Procfile が入ってるか確認
+            - tar -tzf app.tar.gz | grep -E '^requirements.txt$|^Procfile$' || true
+
+            # 5) Herokuへデプロイ
             - pipe: atlassian/heroku-deploy:0.1.1
               variables:
                 HEROKU_API_KEY: $HEROKU_API_KEY
@@ -40,48 +43,4 @@ pipelines:
 
 definitions:
   caches:
-    pip: ~/.cache/pip
-    node: ~/.npm
-
-clone:
-  depth: full
-
-pipelines:
-  branches:
-    main:
-      - step:
-          name: Build & Deploy to Heroku (Django + React)
-          image: atlassian/default-image:4
-          caches:
-            - pip
-            - node
-          script:
-            # 1) フロント build
-            - cd frontend
-            - npm ci
-            - npm run build
-            - cd ..
-
-            # 2) dist を Django の static 配下へコピー（配信したい場所に合わせて調整OK）
-            - rm -rf backend/static/frontend
-            - mkdir -p backend/static/frontend
-            - cp -R frontend/dist/* backend/static/frontend/
-
-            # 3) IMPORTANT: git archive ではなく、作業ツリーを丸ごと tar する（生成物を含めるため）
-            - tar -czf app.tar.gz
-              --exclude-vcs
-              --exclude=frontend/node_modules
-              --exclude=backend/.venv
-              .
-
-            # 4) Herokuへデプロイ
-            - pipe: atlassian/heroku-deploy:0.1.1
-              variables:
-                HEROKU_API_KEY: $HEROKU_API_KEY
-                HEROKU_APP_NAME: $HEROKU_APP_NAME
-                ZIP_FILE: app.tar.gz
-
-definitions:
-  caches:
-    pip: ~/.cache/pip
     node: ~/.npm
