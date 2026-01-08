@@ -25,6 +25,7 @@ pipelines:
             # 3) IMPORTANT: git archive ではなく、作業ツリーを丸ごと tar する（生成物を含めるため）
             - tar -czf app.tar.gz
               --exclude-vcs
+              --exclude=app.tar.gz
               --exclude=frontend/node_modules
               --exclude=backend/.venv
               .
