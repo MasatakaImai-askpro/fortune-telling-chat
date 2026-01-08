@@ -39,6 +39,14 @@ class CustomUserManager(BaseUserManager):
 
     def get_by_natural_key(self, email):
         return self.get(email=email)
+    
+class RoomManager(models.Manager):
+    def get_or_create_for(self, fortuneteller_id, querent_id):
+        room, created = self.get_or_create(
+            fortuneteller_id=fortuneteller_id,
+            querent_id=querent_id
+        )
+        return room
 
 
 class User(AbstractBaseUser, PermissionsMixin, CreatedAtModel):
@@ -150,6 +158,11 @@ class Room(CreatedAtModel):
         on_delete=models.CASCADE,
         related_name="room_que"
     )
+
+    objects = RoomManager()
+
+    class Meta:
+        unique_together = ("querent", "fortuneteller")
 
 
 class Message(models.Model):

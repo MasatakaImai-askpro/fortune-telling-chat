@@ -68,7 +68,7 @@ class QuerentRegistrationSerializer(serializers.Serializer):
     birthplace = serializers.CharField(max_length=50)
     birthtime = serializers.TimeField()
     genre = serializers.CharField(source="worry_category")
-    body = serializers.CharField(source="worry_message", max_length=100)
+    body = serializers.CharField(source="worry_message", max_length=1000)
     confirm = serializers.CharField(source="password", write_only=True)
 
     @transaction.atomic
