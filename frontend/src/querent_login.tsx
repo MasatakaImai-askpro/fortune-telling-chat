@@ -3,10 +3,12 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCookie } from "./utils/cookies";
 import "./index.css";
+import { useAuth } from "./AuthContext";
 
 const csrftoken = getCookie("csrftoken");
 
 export default function QuerentLogin() {
+    const { refreshUser } = useAuth(); 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -32,6 +34,7 @@ export default function QuerentLogin() {
             if (!res.ok) {
                 throw new Error("メールアドレスまたはパスワードが正しくありません。");
             }
+            await refreshUser();
             const data = await res.json();
             const role = data.user_role
             switch(role){
@@ -39,6 +42,7 @@ export default function QuerentLogin() {
                     console.log("権限は１");
                     break;
             }
+            navigate("/");
         } catch (e: any) {
             setError(e.message ?? "ログインに失敗しました。");
         } finally {
