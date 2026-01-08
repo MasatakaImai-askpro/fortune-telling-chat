@@ -1,6 +1,8 @@
-import React, { useMemo, useState, useEffect } from "react";
+// import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { getCookie } from "./utils/cookies";
-import "./index.css"; // Tailwind 読み込み（必須）
+import "./index.css";
+import GearIcon from "./assets/icons/point_settings.png";
 
 const API_BASE = (import.meta.env.VITE_API_URL as string) ?? "/api";
 const csrftoken = getCookie("csrftoken");
@@ -34,7 +36,8 @@ export default function AdvisorApp() {
     const [sejutsuOpen, setSejutsuOpen] = useState(false);
     const [dmOpen, setDmOpen] = useState(false);
     const [dmText, setDmText] = useState("");
-    const [dmTargets, setDmTargets] = useState<string[]>(["557"]); // デモ
+    const [dmTargets, setDmTargets] = useState<string[]>([]);
+    const [sending, setSending] = useState(false);
     const tabs = useMemo(
         () => [
             { id: "chat" as const, label: "💬 チャット対応" },
@@ -49,16 +52,47 @@ export default function AdvisorApp() {
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
         );
 
-    const sendDm = () => {
+    async function sendDm () {
         if (!dmTargets.length) return alert("送信対象を選択してください。");
         if (!dmText.trim()) return alert("DMメッセージを入力してください。");
-        alert(
-            `DMを${dmTargets.length}名に送信しました。\n\n[送信先]: ${dmTargets.join(
-                ", "
-            )}\n[メッセージ]: ${dmText.slice(0, 50)}...`
-        );
-        setDmText("");
-        setDmOpen(false);
+        if (sending) return;
+        setSending(true);
+
+        const payload = {
+            "ids": dmTargets,
+            "dm_text": dmText
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/dm_simultaneous_transmission/`, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrftoken
+                },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`status ${res.status}`);
+            // const data = await res.json().catch(() => ({}));
+            // alert(
+            //     `DMを${dmTargets.length}名に送信しました。\n\n[送信先]: ${dmTargets.join(
+            //         ", "
+            //     )}\n[メッセージ]: ${dmText.slice(0, 50)}...`
+            // );
+            alert(
+                `DMを${dmTargets.length}名に送信しました。\n\n
+                \n[メッセージ]: ${dmText.slice(0, 50)}...`
+            );
+            setDmText("");
+            setDmOpen(false);
+        } catch(e) {
+            console.error(e);
+            alert(
+                "DMの送信に失敗しました。管理者に問い合わせてください。"
+            )
+        } finally {
+            setSending(false);
+        }
     };
 
     type UserInfo = {
@@ -166,6 +200,160 @@ export default function AdvisorApp() {
         fetchBankInfo();
     }, []);
 
+    // チャットルーム一覧の取得
+    type RoomInfo = {
+        id: string;
+        last_msg: string;
+        msg_created_at: string;
+        que_name: string;
+        birthdate: string;
+        zodiac: string;
+        birthplace: string;
+        birthtime: string;
+        worry_category: string;
+        worry_message: string;
+    }
+
+    const [karteOpen, setKarteOpen] = useState(false);
+
+    const [roomInfo, setRoomInfo] = useState<RoomInfo[]>([]);
+    const [loadingRoomInfo, setLoadingRoomInfo] = useState(true);
+    const [errorRoomInfo, setErrorRoomInfo] = useState<string | null>(null);
+    useEffect(() => {
+        const fetchRoomInfo = async() => {
+            try{
+                setLoadingRoomInfo(true);
+                setErrorRoomInfo(null);
+                const res = await fetch(`${API_BASE}/get_fortuneteller_room_info/`,{
+                    method: "GET",
+                    credentials: "include",
+                })
+                if (!res.ok){
+                    throw new Error("failed to fetch RoomInfo")
+                }
+                const data = await res.json();
+                setRoomInfo(data);
+            } catch(e) {
+                console.error("データ取得失敗",e)
+                setErrorRoomInfo("チャットルーム情報を取得できませんでした。")
+            } finally {
+                setLoadingRoomInfo(false);
+            }
+        };
+        fetchRoomInfo();
+    },[]);
+
+    // 選択したルームのメッセージ一覧を取得
+    type ChatMessages = {
+        id: string;
+        sender: string;
+        text: string;
+        created_at: string
+    }
+    const [selectedRoom, setSelectedRoom] = useState<RoomInfo|null>(null);
+    const [messages, setMessages] = useState<ChatMessages[]>([]);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+    const [errorMessages, setErrorMessages] = useState<string| null>(null)
+
+    const socketRef = useRef<WebSocket | null>(null);
+    const [inputValue, setInputValue] = useState("");
+    const [inputMessagePoint, setInputMessagePoint] = useState<string>("500");
+    const [pointError, setPointError] = useState<string | null>(null);
+
+    const handleOpenRoom = async (room: RoomInfo) => {
+    try {
+        setSelectedRoom(room);
+        setLoadingMessages(true);
+        setErrorMessages(null);
+
+        const res = await fetch(
+        `${API_BASE}/get_fortuneteller_room_messages/?room_id=${room.id}`,
+        {
+            method: "GET",
+            credentials: "include",
+        }
+        );
+        if (!res.ok) throw new Error("failed to fetch messages");
+        const data = await res.json();
+        setMessages(data);
+    } catch (e) {
+        console.error(e);
+        setErrorMessages("メッセージの取得に失敗しました。");
+        setMessages([]);
+    } finally {
+        setLoadingMessages(false);
+    }
+    };
+
+    // WebSocket接続
+    useEffect(() => {
+        if (!selectedRoom?.id) return;
+
+        // const wsUrl = `${wsScheme}://${window.location.host}/ws/chat/${selectedRoom.id}/`;
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const wsUrl = `${wsScheme}://${window.location.hostname}:8000/ws/chat/${selectedRoom.id}/`;
+        
+        console.log("WS URL:", wsUrl);
+        console.log(document.cookie);
+
+        const sock = new WebSocket(wsUrl);
+        socketRef.current = sock;
+
+        sock.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "history") {
+                // サーバが履歴を流してくる場合
+                setMessages(data.messages);
+            }
+
+            if (data.type === "new_message") {
+                setMessages((prev) => [...prev, data.message]);
+            }
+        };
+
+        sock.onclose = () => {
+            console.log("advisor socket closed");
+        };
+
+        return () => {
+            sock.close();
+        };
+    }, [selectedRoom?.id]); 
+
+    type sendCategory = "normal" | "length_paying" | "healing"
+
+    const handleSend = ( category:sendCategory = "normal" ) => {
+        if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+            console.error("WebSocket is not connected");
+            return;
+        }
+        if (!inputValue.trim()) return;
+
+        const payload: any = {
+            type: "chat_message",
+            sender: "fortuneteller",
+            text: inputValue,
+        }
+
+        if (category === "length_paying"){
+            payload.category = "length_paying"
+        }
+        else if(category === "healing") {
+            const point = Number(inputMessagePoint);
+            if (!inputMessagePoint || isNaN(point) || point <= 0) {
+                setPointError("ポイントは1以上を入力してください");
+            return;
+            }
+            setPointError(null);
+            payload.category = "healing"
+            payload.point = inputMessagePoint
+        }
+        
+        socketRef.current.send(JSON.stringify(payload));
+        setInputValue("");
+    }
+
     const [bankSubmitting, setBankSubmitting] = useState(true);
     const [bankSubMsg, setBankSubMsg] = useState<string | null>(null);
     const [bankSubErr, setBankSubErr] = useState<string | null>(null);
@@ -239,133 +427,194 @@ export default function AdvisorApp() {
                         </div>
 
                         <div id="inbox-content" className="space-y-4 p-4 pt-0">
-                            <h4 className="text-lg font-bold">Inbox (2件)</h4>
+                            <h4 className="text-lg font-bold">Inbox ({roomInfo.length}件)</h4>
                             <div className="grid grid-cols-1 gap-3">
-                                <div className="relative text-left p-4 bg-white/5 border border-white/10 rounded-xl space-y-1 hover:bg-white/10 transition-colors cursor-pointer">
+                                {roomInfo.map((room) => (
+                                <div
+                                    key={room.id}
+                                    onClick={() => handleOpenRoom(room)}
+                                    className="relative text-left p-4 bg-white/5 border border-white/10 rounded-xl space-y-1 hover:bg-white/10 transition-colors cursor-pointer"
+                                >
                                     <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-                                    <div className="flex justify-between items-center">
-                                        <div className="font-semibold text-lg">相談者 #557</div>
-                                        <div className="text-xs text-white/60">19:00 PM</div>
-                                    </div>
-                                    <div className="text-sm truncate text-white/80">
-                                        冷却期間は3ヶ月ほどで、別れた原因は私の仕事の忙しさです。
-                                    </div>
-                                </div>
 
-                                <div className="text-left p-4 bg-white/5 border border-white/10 rounded-xl space-y-1 hover:bg-white/10 transition-colors cursor-pointer">
                                     <div className="flex justify-between items-center">
-                                        <div className="font-semibold text-lg">相談者 #618</div>
-                                        <div className="text-xs text-white/60">17:30 PM</div>
+                                        <div className="font-semibold text-lg">
+                                            {room.que_name}
+                                        </div>
+
+                                        <div className="text-xs text-white/60">
+                                            {new Date(room.msg_created_at).toLocaleTimeString("ja-JP", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            })}
+                                        </div>
                                     </div>
+
                                     <div className="text-sm truncate text-white/80">
-                                        転職で迷っています。A社とB社のどちらが良いか、見ていただけますか？
+                                        {room.last_msg}
                                     </div>
                                 </div>
+                                ))}
                             </div>
                         </div>
 
                         {/* チャットルーム */}
-                        <div id="chatroom-design" className="mt-8">
-                            <h4 className="text-lg font-bold px-4 mb-3">チャットルームデザイン</h4>
-                            <div className="flex flex-col h-[70vh] bg-white/5 border border-white/10 rounded-2xl m-4">
-                                <div className="p-4 border-b border-white/10 sticky top-0 bg-white/5 rounded-t-2xl z-10">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-lg font-bold truncate">相談者 #557 への返信</h3>
-                                        <button className="text-xs bg-white/10 rounded-lg px-3 py-1 border border-white/20 shrink-0">
-                                            Inboxに戻る
+                        {selectedRoom && (
+                            <div id="chatroom-design" className="mt-8">
+                        <h4 className="text-lg font-bold px-4 mb-3">チャットルーム</h4>
+                        <div className="flex flex-col h-[70vh] bg-white/5 border border-white/10 rounded-2xl m-4">
+                            <div className="p-4 border-b border-white/10 sticky top-0 bg-white/5 rounded-t-2xl z-10">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold truncate">
+                                {selectedRoom ? `${selectedRoom.que_name} への返信` : "チャットルーム"}
+                                </h3>
+
+                                {/* 🔽 Inboxに戻るに onClick 追加（div追加なし） */}
+                                <button
+                                className="text-xs bg-white/10 rounded-lg px-3 py-1 border border-white/20 shrink-0"
+                                onClick={() => {
+                                    setSelectedRoom(null);
+                                    setMessages([]);
+                                }}
+                                >
+                                Inboxに戻る
+                                </button>
+                            </div>
+                            <button 
+                                className="mt-2 w-full text-xs bg-white/10 rounded-lg px-3 py-1 border border-white/20 text-white/80"
+                                onClick={() => setKarteOpen((prev) => !prev)}
+                                >
+                                {karteOpen
+                                    ? "▲ カルテ情報を閉じる"
+                                    : "▼ カルテ情報を表示(お悩みジャンル・生年月日等)"}
+                            </button>
+                            {karteOpen && selectedRoom && (
+                                <div
+                                    className="mt-2 w-full text-xs bg-black/30 rounded-lg px-3 py-2 border border-white/20 text-white/80"
+                                >
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                    <p>生年月日: {selectedRoom.birthdate ?? "----/--/--"}</p>
+                                    <p>星座: {selectedRoom.zodiac ?? "未設定"}</p>
+                                    <p>出生地: {selectedRoom.birthplace ?? "未設定"}</p>
+                                    <p>出生時間: {selectedRoom.birthtime ?? "--:--"}</p>
+                                    <p>お悩みジャンル: {selectedRoom.worry_category ?? "未設定"}</p>
+                                    <p>お悩み内容: {selectedRoom.worry_message ?? "未設定"}</p>
+                                    </div>
+                                </div>
+                                )}
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                            {loadingMessages && (
+                                <div className="text-sm text-white/60">読み込み中...</div>
+                            )}
+                            {errorMessages && (
+                                <div className="text-sm text-red-400">{errorMessages}</div>
+                            )}
+
+                            {messages.map((msg) => (
+                                <div
+                                key={msg.id}
+                                className={`flex ${
+                                    msg.sender === "querent" ? "justify-start" : "justify-end"
+                                }`}
+                                >
+                                {/* 送信者の名前表示必要か。不要なら時間のみ表示 */}
+                                <div className="max-w-[80%] rounded-2xl p-3 shadow-lg bg-indigo-600">
+                                    <div className="text-[10px] mb-1 text-white/70">
+                                    {selectedRoom?.que_name ?? "相談者"}・
+                                    {new Date(msg.createdAt).toLocaleString("ja-JP", {
+                                        year: "numeric",
+                                        month: "2-digit",
+                                        day: "2-digit",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    })}
+                                    </div>
+                                    <p className="whitespace-pre-wrap leading-relaxed text-white">
+                                    {msg.text}
+                                    </p>
+                                </div>
+                                </div>
+                            ))}
+                            </div>
+
+                            <div className="p-4 border-t border-white/10 bg-white/5 rounded-b-2xl">
+                            {sejutsuOpen && (
+                                <div id="sejutsu-settings" className="sejutsu-panel mb-3 block">
+                                <h5 className="font-semibold text-amber-300 mb-2">
+                                    ✨ 施術メッセージ設定
+                                </h5>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <label className="text-sm flex-shrink-0">ポイント設定:</label>
+                                    <input
+                                    type="number"
+                                    className="w-20 rounded-lg bg-black/30 border border-amber-400/50 px-2 py-1 text-sm text-yellow-300"
+                                    value={inputMessagePoint}
+                                    onChange={(e) => setInputMessagePoint(e.target.value)}
+                                    />
+                                    <span className="text-sm">pt</span>
+                                </div>
+                                <label className="block text-xs text-white/70">
+                                    ファイルや画像も添付可能です。このメッセージは顧客側でポイントを消費して開封されます。
+                                </label>
+                                <button
+                                    onClick={() => setSejutsuOpen(false)}
+                                    className="mt-3 py-1 px-3 text-xs bg-white/20 rounded-lg"
+                                >
+                                    設定を閉じる
+                                </button>
+                                </div>
+                            )}
+                            <div className="flex gap-2">
+                                <textarea
+                                placeholder="ご鑑定の返信を入力..."
+                                className="flex-1 bg-black/10 outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50 rounded-xl px-3 py-2"
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                />
+                                <div className="flex flex-col gap-2">
+                                    <button 
+                                    onClick={() => handleSend("normal")}
+                                    className="rounded-xl bg-pink-500 text-white px-5 py-2 text-sm font-semibold hover:bg-pink-600 transition-colors"
+                                    >
+                                        返信 (通常)
+                                    </button>
+                                    <button
+                                    onClick={() => handleSend("length_paying")}
+                                    className="rounded-xl bg-indigo-500 text-white px-5 py-2 text-sm font-semibold hover:bg-indigo-600 transition-colors"
+                                    >
+                                        鑑定結果送信 (文字数課金)
+                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleSend("healing")}
+                                            className="rounded-xl bg-amber-500 text-gray-900 px-5 py-2 text-sm font-semibold hover:bg-amber-600 transition-colors"
+                                        >
+                                            施術メッセージ送信
+                                        </button>
+                                        <button
+                                            onClick={() => setSejutsuOpen(true)}
+                                            className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-white/10 transition-colors"
+                                            aria-label="施術メッセージ設定"
+                                        >
+                                            <img
+                                                src={GearIcon}
+                                                alt=""
+                                                className="w-5 h-5"
+                                            />
                                         </button>
                                     </div>
-                                    <button className="mt-2 w-full text-xs bg-white/10 rounded-lg px-3 py-1 border border-white/20 text-white/80">
-                                        ▶︎ カルテ情報を表示 (ジャンル: 恋愛 / 生年月日: 1990-01-01)
-                                    </button>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                    <div className="flex justify-end">
-                                        <div className="max-w-[80%] rounded-2xl p-3 shadow-lg bg-indigo-600">
-                                            <div className="text-[10px] mb-1 text-white/70">
-                                                相談者 #557・19:00 PM
-                                            </div>
-                                            <p className="whitespace-pre-wrap leading-relaxed text-white">
-                                                初めまして。彼との復縁の可能性について知りたいです。
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex justify-start">
-                                        <div className="unopened-msg max-w-[80%]">
-                                            <p className="text-sm font-semibold">【霊澄からの特別メッセージ】</p>
-                                            <p className="text-xs mt-1">
-                                                このメッセージは未開封です。開封には <strong>300 pt</strong> が必要です。
-                                            </p>
-                                            <button className="mt-2 py-1 px-3 bg-yellow-500 text-gray-900 rounded-full text-xs font-bold">
-                                                メッセージを開封
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <div className="max-w-[80%] rounded-2xl p-3 shadow-lg bg-indigo-600">
-                                            <div className="text-[10px] mb-1 text-white/70">
-                                                相談者 #557・19:30 PM
-                                            </div>
-                                            <p className="whitespace-pre-wrap leading-relaxed text-white">
-                                                冷却期間は3ヶ月ほどで、別れた原因は私の仕事の忙しさです。
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 border-t border-white/10 bg-white/5 rounded-b-2xl">
-                                    {sejutsuOpen && (
-                                        <div id="sejutsu-settings" className="sejutsu-panel mb-3 block">
-                                            <h5 className="font-semibold text-amber-300 mb-2">
-                                                ✨ 施術メッセージ設定
-                                            </h5>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <label className="text-sm flex-shrink-0">ポイント設定:</label>
-                                                <input
-                                                    type="number"
-                                                    defaultValue={500}
-                                                    className="w-20 rounded-lg bg-black/30 border border-amber-400/50 px-2 py-1 text-sm text-yellow-300"
-                                                />
-                                                <span className="text-sm">pt</span>
-                                            </div>
-                                            <label className="block text-xs text-white/70">
-                                                ファイルや画像も添付可能です。このメッセージは顧客側でポイントを消費して開封されます。
-                                            </label>
-                                            <button
-                                                onClick={() => setSejutsuOpen(false)}
-                                                className="mt-3 py-1 px-3 text-xs bg-white/20 rounded-lg"
-                                            >
-                                                設定を閉じる
-                                            </button>
-                                        </div>
+                                    {pointError && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {pointError}
+                                        </p>
                                     )}
-
-                                    <div className="flex gap-2">
-                                        <textarea
-                                            placeholder="ご鑑定の返信を入力..."
-                                            className="flex-1 bg-black/10 outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50 rounded-xl px-3 py-2"
-                                        />
-                                        <div className="flex flex-col gap-2">
-                                            <button className="rounded-xl bg-pink-500 text-white px-5 py-2 text-sm font-semibold hover:bg-pink-600 transition-colors">
-                                                返信 (通常)
-                                            </button>
-                                            <button className="rounded-xl bg-indigo-500 text-white px-5 py-2 text-sm font-semibold hover:bg-indigo-600 transition-colors">
-                                                鑑定結果送信 (文字数課金)
-                                            </button>
-                                            <button
-                                                onClick={() => setSejutsuOpen(true)}
-                                                className="rounded-xl bg-amber-500 text-gray-900 px-5 py-2 text-sm font-semibold hover:bg-amber-600 transition-colors"
-                                            >
-                                                施術メッセージ送信
-                                            </button>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
+                            </div>
                         </div>
+                        </div>
+                        )}
                     </div>
                 )}
 
@@ -593,25 +842,27 @@ export default function AdvisorApp() {
                             </p>
                         </div>
 
-                        <div className="dm-customer-list px-4 py-3 space-y-2">
-                            {[
+                            {/* [
                                 { id: "557", label: "相談者 #557 (最終: 1日前)" },
                                 { id: "618", label: "相談者 #618 (最終: 3日前)" },
                                 { id: "801", label: "相談者 #801 (最終: 1週間前)" },
-                            ].map((c) => (
-                                <label
-                                    key={c.id}
-                                    className="flex items-center justify-between p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer"
-                                >
-                                    <span className="text-sm">{c.label}</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={dmTargets.includes(c.id)}
-                                        onChange={() => toggleTarget(c.id)}
-                                        className="h-4 w-4 text-fuchsia-600 rounded border-gray-300 focus:ring-fuchsia-500"
-                                    />
-                                </label>
-                            ))}
+                            ] */}
+                        <div className="dm-customer-list px-4 py-3 space-y-2">
+                            {roomInfo
+                                .map((c) => (
+                                    <label
+                                        key={c.id}
+                                        className="flex items-center justify-between p-2 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer"
+                                    >
+                                        <span className="text-sm">{c.que_name}</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={dmTargets.includes(c.id)}
+                                            onChange={() => toggleTarget(c.id)}
+                                            className="h-4 w-4 text-fuchsia-600 rounded border-gray-300 focus:ring-fuchsia-500"
+                                        />
+                                    </label>
+                                ))}
                         </div>
 
                         <div className="p-4 border-t border-white/10 space-y-3">
@@ -632,8 +883,9 @@ export default function AdvisorApp() {
                                 <button
                                     onClick={sendDm}
                                     className="flex-1 py-2 rounded-xl bg-fuchsia-600 text-white font-semibold"
+                                    disabled={sending}
                                 >
-                                    選択した顧客へ送信
+                                    {sending ? "送信中..." : "選択した顧客へ送信"}
                                 </button>
                             </div>
                         </div>

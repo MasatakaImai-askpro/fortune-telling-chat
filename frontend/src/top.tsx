@@ -3,10 +3,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { getCookie } from "./utils/cookies";
 import "./index.css";
+import { useAuth } from "./AuthContext.tsx";
+import { useNavigate } from "react-router-dom";
 
 const csrftoken = getCookie("csrftoken");
-
-
 const API_BASE = (import.meta.env.VITE_API_URL as string) ?? "/api";
 
 /** ===================== 定数/設定 ===================== */
@@ -116,23 +116,104 @@ function Textarea({ label, value, onChange, hint }) {
 }
 
 /** ===================== レイアウト系 ===================== */
-function Header({ plan, points, subscriptionActive, onGoPlan }) {
+function Header({
+    user,
+    loading,
+    point,
+    onGoPlan,
+}: Props) {
+    const navigate = useNavigate();
+    
+    const [logoutProcessing, setLogoutProcessing] = useState(false);
+    const [logoutSuccessMsg, setLogoutSuccessMsg] = useState<string|null>(null);
+    if (loading) {
+        return null;
+    }
+    async function logOut() {
+        try{
+            setLogoutProcessing(true);
+
+            const csrftoken = getCookie("csrftoken"); 
+
+            const res = await fetch(`${API_BASE}/user_logout/`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken
+            },
+            credentials: "include",
+            });
+            if (!res.ok) throw new Error("Logout failed on server.")
+            window.location.reload();
+            setLogoutSuccessMsg("ログアウトしました。")
+        } catch(e) {
+            console.error(e);
+            alert("ログアウト処理中にエラーが発生しました。再度お試しください。");
+        } finally {
+            setLogoutProcessing(false);
+        }
+    }
     return (
         <div className="px-4 py-3">
             <div className="flex items-center justify-between">
+                
+                {/* 左側 */}
                 <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center shadow-lg shadow-fuchsia-800/30 text-sm">🔮</div>
-                    <div className="text-lg font-extrabold tracking-tight leading-tight">占いチャット</div>
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-fuchsia-500 to-amber-400 flex items-center justify-center shadow-lg shadow-fuchsia-800/30 text-sm">
+                        🔮
+                    </div>
+                    <div className="text-lg font-extrabold tracking-tight leading-tight">
+                        占いチャット
+                    </div>
                 </div>
-                <div className="text-xs bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/10">
-                    {points > 0 ? `ポイント ${points.toLocaleString()}` : (
-                        <button onClick={onGoPlan} className="text-white/80 font-semibold">ログイン/新規登録</button>
+
+                {/* 右側 */}
+                <div className="flex flex-col items-end gap-2">
+
+                    {user ? (
+                        <>
+                        {/* ログイン中 */}
+                        <div className="text-xs bg-white/10 backdrop-blur rounded-full px-3 py-1 border border-white/10">
+                            ポイント {point}
+                        </div>
+                        <button
+                            className="text-xs rounded-full px-3 py-1 bg-white/10 cursor-pointer border border-white/20 hover:border-white/50 transition duration-200"
+                            onClick={logOut}
+                            disabled={logoutProcessing}
+                        >
+                            ログアウト
+                        </button>
+                        {logoutSuccessMsg && (
+                            <p className="text-xs text-red-400 mt-1">
+                            {logoutSuccessMsg}
+                            </p>
+                        )}
+                        </>
+                    ) : (
+                        <>
+                        {/* 未ログイン */}
+                        <div className="flex gap-2">
+                            <button
+                            onClick={() => navigate("/querent_login")}
+                            className="text-xs rounded-full px-3 py-1 bg-white/10 cursor-pointer border border-white/20 hover:border-white/50 transition duration-200"
+                            >
+                            ログイン
+                            </button>
+                            <button
+                            onClick={() => navigate("/registration/querent")}
+                            className="text-xs rounded-full px-3 py-1 bg-white/10 cursor-pointer border border-white/20 hover:border-white/50 transition duration-200"
+                            >
+                            新規登録
+                            </button>
+                        </div>
+                        </>
                     )}
                 </div>
             </div>
         </div>
     );
 }
+
 
 function RankedCarousel({ title, advisors, onStartChat, onFav, favorites, limit = 10, emptyText, showRankBadge = true }) {
     const sortedAdvisors = useMemo(() => {
@@ -291,7 +372,7 @@ function Advisors({advisorsFromTop, favorites, onFav, onStartChat }) {
 }
 
 /** ============== 送信確認モーダル ============== */
-function ConfirmModal({ cost, onConfirm, onCancel }) {
+function ConfirmModal({ cost, onConfirm, onCancel, querentInfo }) {
     return (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onCancel}>
             <div className="w-full max-w-sm bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden p-5 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -299,7 +380,7 @@ function ConfirmModal({ cost, onConfirm, onCancel }) {
                 <p className="text-white/90 leading-relaxed">
                     このメッセージを送信すると、<b className="text-lg text-pink-200">{fmtPts(cost)}</b>（約{yen(cost)}）を消費します。
                 </p>
-                <p className="text-sm text-white/70">残ポイント: <b>{fmtPts(storage.load("points", 0))}</b></p>
+                <p className="text-sm text-white/70">残ポイント: <b>{fmtPts(querentInfo?.point ?? 0)}</b></p>
                 <div className="grid grid-cols-2 gap-3 pt-2">
                     <button className="rounded-xl py-2 text-sm font-semibold bg-white/10 border border-white/20 text-white/80" onClick={onCancel}>キャンセル</button>
                     <button className="rounded-xl py-2 text-sm font-semibold bg-pink-500 text-gray-900" onClick={onConfirm}>送信して消費する</button>
@@ -310,7 +391,7 @@ function ConfirmModal({ cost, onConfirm, onCancel }) {
 }
 
 /** ============== チャット ============== */
-function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, saveThread, onBack }) {
+function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, setThreads, onBack, querentInfo }) {
     const [text, setText] = useState("");
     const [uploads, setUploads] = useState([]);
     const fileInputRef = useRef(null);
@@ -321,6 +402,20 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, sa
     const [roomLoading, setRoomLoading] = useState(true);
     const [room, setRoom] = useState(null);
     const socketRef = useRef(null);
+    const messages = thread?.messages ?? [];
+
+    const normalizeWsMessage = (m: any): Message | null => {
+    if (!m) return null;
+
+    return {
+        id: m.id,
+        sender: m.sender,
+        text: m.text,
+        created_at: m.created_at ?? new Date().toISOString(),
+        attachments: m.attachments ?? [],
+        free: m.free ?? false,
+    };
+    };
 
     useEffect (() =>{
         if (!advisor) return;
@@ -337,8 +432,8 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, sa
                 });
                 if (!res.ok) throw new Error ("failed");
                 const data = await res.json();
-                if (data && data.id){
-                    setRoom({ id: data.id, messages: data.messages || [] });
+                if (data){
+                    setRoom({ id: data.id});
                 } else {
                     setRoom(null)
                 };
@@ -352,70 +447,103 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, sa
         fetchRoom();
     }, [advisor?.id])
 
-    useEffect (() => {
-        if (roomLoading) return;
-        if (!advisor) return;
+    useEffect(() => {
+    if (roomLoading) return;
+    if (!advisor) return;
 
-        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = room
+        ? `${wsScheme}://${window.location.host}/ws/chat/${room.id}/`
+        : `${wsScheme}://${window.location.host}/ws/chat/fortuneteller/${advisor.id}/`;
 
-        const wsUrl = room
-            ? `${wsScheme}://${window.location.host}/ws/chat/${room.id}/`
-            : `${wsScheme}://${window.location.host}/ws/chat/fortuneteller/${advisor.id}/`;
+    const sock = new WebSocket(wsUrl);
+    socketRef.current = sock;
 
-        const sock = new WebSocket(wsUrl);
-        socketRef.current = sock;
+    sock.onmessage = (event) => {
+        const data = JSON.parse(event.data);
 
-        sock.onmessage = (event) => {
-            const data = JSON.parse(event.data)
-            
-            if (data.type === "room_init"){
-                setRoom((prev) => ({
-                    id: data.room_id,
-                    message: prev?.messages ?? []
-                }));
-            }
-            if (data.type === "history"){
-                setRoom((prev) => ({
-                    id: data.room_id || room?.id,
-                    messages: data.messages
-                }));
-            }
-            if (data.type === "new_message"){
-                setRoom((prev) => ({
-                    ...(prev || {id: room?.id}),
-                    messages: [...(prev?.messages || []), data.message],
-                }))
-            }
-        };
-        return () =>{
-            sock.close();
-        };
-    },[roomLoading, advisor?.id, room?.id]);
+        // ✅ 過去履歴は「必ずそのまま入れる」
+        if (data.type === "history") {
+            setThreads((prev) => ({
+            ...prev,
+            [advisor.id]: {
+                advisorId: advisor.id,
+                roomId: data.room_id,
+                messages: data.messages,
+            },
+            }));
+            return;
+        }
+
+        // ✅ 新着だけ append
+        if (data.type === "new_message") {
+            setThreads((prev) => {
+            const t = prev[advisor.id] ?? {
+                advisorId: advisor.id,
+                roomId: data.room_id,
+                messages: [],
+            };
+
+            return {
+                ...prev,
+                [advisor.id]: {
+                ...t,
+                roomId: data.room_id ?? t.roomId,
+                messages: [...(t.messages ?? []), data.message],
+                },
+            };
+            });
+        }
+    };
+
+    return () => {
+        sock.close();
+    };
+    }, [roomLoading, advisor?.id, room?.id, setThreads]);
 
     
 
     if (!advisor) return <section className="py-12 text-center text-white/70">まず占い師を選んでください（ホームまたは「占い師」から）。</section>;
 
+    // const addMsg = (msg) => {
+    //     const t = thread || { advisorId: advisor.id, messages: [] };
+    //     const updated = { ...t, messages: [...t.messages, msg] };
+    //     setThreads(updated);
+    // };
     const addMsg = (msg) => {
-        const t = thread || { advisorId: advisor.id, messages: [] };
-        const updated = { ...t, messages: [...t.messages, msg] };
-        saveThread(updated);
+    setThreads((prev) => {
+        const t = prev[advisor.id] ?? {
+        advisorId: advisor.id,
+        roomId: room?.id,
+        messages: [],
+        };
+
+        return {
+        ...prev,
+        [advisor.id]: {
+            ...t,
+            messages: [...t.messages, msg],
+        },
+        };
+    });
     };
     const executeSend = (cost) => {
         if (!(plan === "subscription" && subscriptionActive)) 
             setPoints((p) => p - cost);
-        const message = {
+        const uiMessage = {
             id: crypto.randomUUID(),
-            role: "querent",
+            sender: "querent",
             text: text.trim(),
+            created_at: new Date().toISOString(),
             attachments: uploads,
-            createAt: Date.now(),
-            free: cost === 0
-        }
-        addMsg(message)
+            free: 0,
+            point: cost
+        };
+        // addMsg(uiMessage)
 
         const payload = {
             type: "chat_message",
+            sender:"querent",
             text: text.trim(),
             attachments: uploads
         };
@@ -482,7 +610,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, sa
 
     return (
         <section className="pb-28">
-            {costToConfirm !== null && (<ConfirmModal cost={costToConfirm} onConfirm={onConfirmSend} onCancel={() => setCostToConfirm(null)} />)}
+            {costToConfirm !== null && (<ConfirmModal cost={costToConfirm} onConfirm={onConfirmSend} onCancel={() => setCostToConfirm(null)} querentInfo={querentInfo} />)}
 
             <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-0 bg-[#0d1a33]/80 backdrop-blur border-b border-white/10">
                 <div className="flex items-center gap-3 py-1">
@@ -508,20 +636,20 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, sa
             </div>
 
             <div className="mt-3 space-y-3">
-                {(thread?.messages ?? []).length === 0 ? (
+                {messages.length === 0 ? (
                     <div className="text-center text-white/60 mt-8 text-sm">最初のご相談内容を送ってみましょう。（「＋」でファイル添付ができます）</div>
                 ) : (
                     <ul className="space-y-3">
-                        {thread.messages.map((m) => (
-                            <li key={m.id} className={cls("px-2", m.role === "user" ? "text-right" : "text-left")}>
+                        {messages.map((m) => (
+                            <li key={m.id} className={cls("px-2", m.sender === "querent" ? "text-right" : "text-left")}>
                                 <div className={cls("inline-block max-w-[85%] rounded-2xl p-3 shadow-lg", m.role === "user" ? (m.free ? "bg-green-600" : "bg-gradient-to-br from-indigo-600 to-fuchsia-600") : "bg-white/8 border border-white/10")}>
-                                    <div className={cls("text-[10px] mb-1", m.role === "user" ? "text-white/70" : "text-white/60")}>{m.role === "user" ? (m.free ? "あなた(無料)" : "あなた") : "占い師"}・{timefmt(m.createdAt)}</div>
+                                    <div className={cls("text-[10px] mb-1", m.sender === "querent" ? "text-white/70" : "text-white/60")}>{m.sender === "querent" ? (m.free ? "あなた(無料)" : "あなた") : "占い師"}・{timefmt(m.created_at)}</div>
                                     {m.attachments?.length > 0 && (
                                         <div className="space-y-2 mb-2">
-                                            {m.attachments.map((a, idx) => <Attachment key={idx} item={a} contrast={m.role === "user"} />)}
+                                            {m.attachments.map((a, idx) => <Attachment key={idx} item={a} contrast={m.sender === "querent"} />)}
                                         </div>
                                     )}
-                                    <p className={cls("whitespace-pre-wrap leading-relaxed", m.role === "user" ? "text-white" : "text-white/90")}>{m.text}</p>
+                                    <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-white/90")}>{m.text}</p>
                                 </div>
                             </li>
                         ))}
@@ -621,17 +749,82 @@ function BottomNav({ activeTab, setActiveTab }) {
 
 /** ===================== ルート App ===================== */
 function Top() {
+    const {user, loading} = useAuth();
     const [plan, setPlan] = useState(() => storage.load("plan", "points")); // 'subscription' | 'points'
-    const [points, setPoints] = useState(() => storage.load("points", 200));
+    // const [points, setPoints] = useState(() => storage.load("points", 200));
+    const [points, setPoints] = useState(200);
     const [subscriptionActive, setSubscriptionActive] = useState(() => storage.load("subscriptionActive", false));
     const [favorites, setFavorites] = useState(() => storage.load("favorites", []));
-    const [threads, setThreads] = useState(() => storage.load("threads", {})); // advisorId -> {messages}
+
+    // 会話内容をDBから取得
+    type Message = {
+    id: number | string;
+    sender: "querent" | "fortuneteller";
+    text: string;
+    created_at: string;
+    attachments?: Attachment[];
+    free?: boolean;
+    };
+
+    type Thread = {
+    roomId: number;
+    advisorId: number;
+    messages: Message[];
+    };
+
+    type ThreadsMap = Record<number, Thread>;
+    const [threads, setThreads] = useState<ThreadsMap>({});
+    // const fetchThreadFromDB = async (advisorId) => {
+    //     const res = await fetch(
+    //         `${API_BASE}/get_chat_message/?advisor_id=${advisorId}`,
+    //         { credentials: "include" }
+    //     );
+    //     if (!res.ok) throw new Error("failed to fetch thread");
+    //     return await res.json();
+    // };
+
     const [activeTab, setActiveTab] = useState("home");
     const [selectedAdvisorId, setSelectedAdvisorId] = useState(() => storage.load("selectedAdvisorId", null));
+    // const [profile, setProfile] = useState(() => storage.load("profile", { name: "", email: "", phone: "", zipcode: "", address: "" }));
+    // const [karte, setKarte] = useState(() => storage.load("karte", { birthdate: "", zodiac: "", birthplace: "", birthtime: "", genre: "", body: "" }));
 
-    const [profile, setProfile] = useState(() => storage.load("profile", { name: "", email: "", phone: "", zipcode: "", address: "" }));
-    const [karte, setKarte] = useState(() => storage.load("karte", { birthdate: "", zodiac: "", birthplace: "", birthtime: "", genre: "", body: "" }));
+    // 情報取得
+    type QuerentInfo = {
+        name: string,
+        email: string,
+        tel_number: string,
+        postal_code: string,
+        address: string,
+        birthdate: string,
+        zodiac_sign: string,
+        birthplace: string,
+        birthtime: string,
+        worry_category: string,
+        worry_message: string,
+        subscription: boolean,
+        point: number
+    }
 
+    const [querentInfo, setQuerentInfo] = useState<QuerentInfo|null>(null);
+    const [errorQuerentInfo, setErrorQuerentInfo] = useState(null);
+    useEffect(() => {
+        const fetchQuerentInfo = async() => {
+            try {
+                setErrorQuerentInfo(null);
+                const res = await fetch(`${API_BASE}/get_querent_info/`);
+                if (!res.ok) {
+                    throw new Error('failed to fetch queinfos')
+                }
+                const data = await res.json();
+                setQuerentInfo(data);
+            } catch (err) {
+                console.log("ユーザプロフィール情報の取得に失敗しました。", err);
+                setErrorQuerentInfo("ユーザプロフィール情報の取得に失敗しました。")
+            }
+        };
+        fetchQuerentInfo();
+    },[])
+    
     const [advisors, setAdvisors] = useState([]);
     const [loadingAdvisors, setLoadingAdvisors] = useState(true);
     const [errorAdvisors, setErrorAdvisors] = useState<string | null>(null);
@@ -658,22 +851,64 @@ function Top() {
         fetchAdvisors();
     }, []);
 
+
+
     useEffect(() => storage.save("plan", plan), [plan]);
-    useEffect(() => storage.save("points", points), [points]);
-    useEffect(() => storage.save("subscriptionActive", subscriptionActive), [subscriptionActive]);
+    // useEffect(() => storage.save("points", points), [points]);
+    // useEffect(() => storage.save("subscriptionActive", subscriptionActive), [subscriptionActive]);
     useEffect(() => storage.save("favorites", favorites), [favorites]);
     useEffect(() => storage.save("threads", threads), [threads]);
     useEffect(() => storage.save("selectedAdvisorId", selectedAdvisorId), [selectedAdvisorId]);
-    useEffect(() => storage.save("profile", profile), [profile]);
-    useEffect(() => storage.save("karte", karte), [karte]);
+    // useEffect(() => storage.save("profile", profile), [profile]);
+    // useEffect(() => storage.save("karte", karte), [karte]);
 
-    const selectedAdvisor = useMemo(() => advisors.find((a) => a.id === selectedAdvisorId) || null, [selectedAdvisorId]);
-    const startChat = (advisorId) => { if (!threads[advisorId]) setThreads((prev) => ({ ...prev, [advisorId]: { advisorId, messages: [] } })); setSelectedAdvisorId(advisorId); setActiveTab("chat"); };
+    const selectedAdvisor = useMemo(() => {
+    return advisors.find((a) => a.id === selectedAdvisorId) || null;
+    }, [selectedAdvisorId, advisors]); 
+    // const startChat = (advisorId) => { if (!threads[advisorId]) setThreads((prev) => ({ ...prev, [advisorId]: { advisorId, messages: [] } })); setSelectedAdvisorId(advisorId); setActiveTab("chat"); };
+    // const startChat = async (advisorId: number) => {
+    // let thread = threads[advisorId];
+
+    // if (!thread) {
+    //     try {
+    //     const data = await fetchThreadFromDB(advisorId);
+
+    //     // 🔴 ここが一番重要：DB → UI 変換
+    //     const uiMessages: Message[] = data.messages.map((m) => ({
+    //         id: m.id,
+    //         sender: m.sender,              // "querent" | "fortuneteller"
+    //         text: m.body,                  // ← DBの body を UI の text に
+    //         created_at: m.created_at,
+    //         attachments: m.attachments ?? [],
+    //         free: false,                   // DBに無ければ false
+    //     }));
+
+    //     setThreads((prev) => ({
+    //         ...prev,
+    //         [advisorId]: {
+    //         roomId: data.room_id,
+    //         advisorId: data.advisor_id,
+    //         messages: uiMessages,        // ← UI用だけ入れる
+    //         },
+    //     }));
+    //     } catch (e) {
+    //     console.error("チャット履歴取得失敗", e);
+    //     return;
+    //     }
+    // }
+    const startChat = (advisorId: number) => {
+        setSelectedAdvisorId(advisorId);
+        setActiveTab("chat");
+        };
     const toggleFavorite = (advisorId) => setFavorites((prev) => prev.includes(advisorId) ? prev.filter((id) => id !== advisorId) : [...prev, advisorId]);
+
+    // if (loading) {
+    //     return <div className="text-white">Loading...</div>;
+    // }
 
     return (
         <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white">
-            <Header plan={plan} points={points} subscriptionActive={subscriptionActive} onGoPlan={() => setActiveTab("account")} />
+            <Header user={user} loading={loading} point={querentInfo?.point} subscriptionActive={querentInfo?.subscription} onGoPlan={() => setActiveTab("account")} />
             <main className="px-4 pb-28">
                 {activeTab === "home" && (
                     <Home advisors={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />
@@ -687,8 +922,9 @@ function Top() {
                         subscriptionActive={subscriptionActive}
                         advisor={selectedAdvisor}
                         thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined}
-                        saveThread={(t) => setThreads((prev) => ({ ...prev, [t.advisorId]: t }))}
+                        setThreads={setThreads}
                         onBack={() => setActiveTab("advisors")}
+                        querentInfo={querentInfo}
                     />
                 )}
                 {activeTab === "chat" && !selectedAdvisor && (
@@ -696,11 +932,7 @@ function Top() {
                 )}
                 {activeTab === "account" && (
                     <Account
-                        plan={plan} setPlan={setPlan}
-                        points={points} setPoints={setPoints}
-                        subscriptionActive={subscriptionActive} setSubscriptionActive={setSubscriptionActive}
-                        profile={profile} setProfile={setProfile}
-                        karte={karte} setKarte={setKarte}
+                        queInfo={querentInfo} setQueInfo={setQuerentInfo} subscriptionActive={subscriptionActive}
                     />
                 )}
             </main>
@@ -757,14 +989,14 @@ function Home({ advisors, favorites, onFav, onStartChat }) {
     );
 }
 
-function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubscriptionActive, profile, setProfile, karte, setKarte }) {
+function Account({ queInfo, setQueInfo }) {
     const [tab, setTab] = useState("plan");
 
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (tab !== "karte") return;   
-        if (!karte.birthdate && !karte.zodiac) return;
+        if (!queInfo.birthdate && !queInfo.zodiac_sign) return;
 
         const ctrl = new AbortController();
 
@@ -773,7 +1005,7 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
                 await fetch(`${API_BASE}/edit_querent_karte/`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(karte),
+                    body: JSON.stringify(queInfo),
                     signal: ctrl.signal
                 });
                 console.log("POSTできた")
@@ -783,7 +1015,7 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
         })();
 
         return () => ctrl.abort();
-    },[karte]);
+    },[queInfo]);
 
     const [submitting, setSubmitting] = useState(false);
     const [submitMsg, setSubmitMsg] = useState<string | null>(null);
@@ -814,7 +1046,7 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
             <div className="flex gap-2">
                 {[
                     { id: "plan", label: "プラン" },
-                    { id: "signup", label: "会員登録" },
+                    { id: "signup", label: "登録情報" },
                     { id: "karte", label: "カルテ" },
                 ].map((t) => (
                     <button key={t.id} onClick={() => setTab(t.id)} className={cls("px-3 py-2 rounded-lg text-xs", tab === t.id ? "bg-white text-gray-900" : "bg-white/10 border border-white/15")}>{t.label}</button>
@@ -829,19 +1061,19 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
                                 <div className="font-semibold">月額サブスク</div>
                                 <div className="text-sm text-white/70">ポイント消費なし。相談し放題。</div>
                             </div>
-                            <Ribbon rank={"S"} />
+                            {/* <Ribbon rank={"S"} /> */}
                         </div>
                         <div className="mt-3 flex items-center gap-3">
                             <label className="flex items-center gap-2 text-sm">
-                                <input type="radio" checked={plan === "subscription"} onChange={() => setPlan("subscription")} /> このプランにする
+                                <input type="radio" checked={ queInfo.subscription === true} onChange={() => setQueInfo.subscription(true)} /> このプランにする
                             </label>
                         </div>
                         <div className="mt-3 flex gap-2">
-                            <button className={cls("rounded-xl px-4 py-2 text-sm font-semibold", subscriptionActive ? "bg-emerald-300 text-gray-900" : "bg-white text-gray-900")}
-                                onClick={() => { if (!subscriptionActive) { window.open(STRIPE_TEST_CHECKOUT_SUBSCRIPTION, "_blank"); alert("デモ: StripeのテストCheckoutへ遷移します。決済後は下のボタンで有効化してください。"); } }}>
-                                {subscriptionActive ? "契約中" : "Stripeで契約(テスト)"}
+                            <button className={cls("rounded-xl px-4 py-2 text-sm font-semibold", queInfo.subscription ? "bg-emerald-300 text-gray-900" : "bg-white text-gray-900")}
+                                onClick={() => { if (!queInfo.is_subscription) { window.open(STRIPE_TEST_CHECKOUT_SUBSCRIPTION, "_blank"); alert("デモ: StripeのテストCheckoutへ遷移します。決済後は下のボタンで有効化してください。"); } }}>
+                                {queInfo.subscription ? "契約中" : "Stripeで契約(テスト)"}
                             </button>
-                            {!subscriptionActive && (<button className="rounded-xl px-3 py-2 text-xs bg-white/10 border border-white/20" onClick={() => setSubscriptionActive(true)}>← 決済済として有効化(デモ)</button>)}
+                            {!queInfo.subscription && (<button className="rounded-xl px-3 py-2 text-xs bg-white/10 border border-white/20" onClick={() => setSubscriptionActive(true)}>← 決済済として有効化(デモ)</button>)}
                         </div>
                     </div>
 
@@ -851,13 +1083,13 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
                                 <div className="font-semibold">ポイント制</div>
                                 <div className="text-sm text-white/70">1pt={YEN_PER_POINT}円。文字数×ランク倍率で消費。</div>
                             </div>
-                            <Ribbon rank={"A"} />
+                            {/* <Ribbon rank={"A"} /> */}
                         </div>
                         <div className="mt-3 flex items-center gap-3">
                             <label className="flex items-center gap-2 text-sm">
-                                <input type="radio" checked={plan === "points"} onChange={() => setPlan("points")} /> このプランにする
+                                <input type="radio" checked={ queInfo.subscription === "points"} onChange={() => setPlan("points")} /> このプランにする
                             </label>
-                            <span className="text-sm text-white/80">残高: <b>{fmtPts(points)}</b>（約{yen(points)}）</span>
+                            <span className="text-sm text-white/80">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2">
                             <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" onClick={() => { window.open(STRIPE_TEST_CHECKOUT_POINTS_1000, "_blank"); setPoints(points + 1000); }}>1000pt購入(約{yen(1000)})</button>
@@ -871,13 +1103,13 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
 
             {tab === "signup" && (
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
-                    <h2 className="text-lg font-semibold">会員登録</h2>
-                    <Input label="名前" value={profile.name} onChange={(v) => setProfile({ ...profile, name: v })} />
-                    <Input label="メールアドレス" value={profile.email} onChange={(v) => setProfile({ ...profile, email: v })} type="email" />
-                    <Input label="電話番号" value={profile.phone} onChange={(v) => setProfile({ ...profile, phone: v })} />
+                    <h2 className="text-lg font-semibold">登録情報</h2>
+                    <Input label="名前" value={queInfo.name} onChange={(v) => setQueInfo({ ...queInfo, name: v })} />
+                    <Input label="メールアドレス" value={queInfo.email} onChange={(v) => setQueInfo({ ...queInfo, email: v })} type="email" />
+                    <Input label="電話番号" value={queInfo.tel_number} onChange={(v) => setQueInfo({ ...queInfo, tel_number: v })} />
                     <div className="grid grid-cols-3 gap-2">
-                        <Input label="郵便番号" value={profile.zipcode} onChange={(v) => setProfile({ ...profile, zipcode: v })} />
-                        <div className="col-span-2"><Input label="住所" value={profile.address} onChange={(v) => setProfile({ ...profile, address: v })} /></div>
+                        <Input label="郵便番号" value={queInfo.postal_code} onChange={(v) => setQueInfo({ ...queInfo, postal_code: v })} />
+                        <div className="col-span-2"><Input label="住所" value={queInfo.address} onChange={(v) => setQueInfo({ ...queInfo, address: v })} /></div>
                     </div>
                                         <div className="flex items-center justify-between pt-2">
                         <div className="text-xs text-white/70">
@@ -889,7 +1121,7 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
                             disabled={submitting}
                             className="px-4 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50"
                         >
-                            {submitting ? "送信中..." : "会員登録"}
+                            {submitting ? "送信中..." : "更新する"}
                         </button>
                     </div>
                 </div>
@@ -900,13 +1132,13 @@ function Account({ plan, setPlan, points, setPoints, subscriptionActive, setSubs
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
                     <h2 className="text-lg font-semibold">カルテ</h2>
                     <div className="grid grid-cols-2 gap-2">
-                        <Input label="生年月日" value={karte.birthdate} onChange={(v) => setKarte({ ...karte, birthdate: v })} placeholder="YYYY-MM-DD" />
-                        <Input label="星座" value={karte.zodiac} onChange={(v) => setKarte({ ...karte, zodiac: v })} placeholder="例: しし座" />
-                        <Input label="出生地" value={karte.birthplace} onChange={(v) => setKarte({ ...karte, birthplace: v })} />
-                        <Input label="出生時間" value={karte.birthtime} onChange={(v) => setKarte({ ...karte, birthtime: v })} placeholder="例: 14:30" />
+                        <Input label="生年月日" value={queInfo.birthdate} onChange={(v) => setQueInfo({ ...queInfo, birthdate: v })} placeholder="YYYY-MM-DD" />
+                        <Input label="星座" value={queInfo.zodiac_sign} onChange={(v) => setQueInfo({ ...queInfo, zodiac_sign: v })} placeholder="例: しし座" />
+                        <Input label="出生地" value={queInfo.birthplace} onChange={(v) => setQueInfo({ ...queInfo, birthplace: v })} />
+                        <Input label="出生時間" value={queInfo.birthtime} onChange={(v) => setQueInfo({ ...queInfo, birthtime: v })} placeholder="例: 14:30" />
                     </div>
-                    <Select label="お悩みジャンル" value={karte.genre} onChange={(v) => setKarte({ ...karte, genre: v })} options={SAMPLE_GENRES} />
-                    <Textarea label="お悩み内容 (1000文字以内)" value={karte.body} onChange={(v) => { if (v.length <= 1000) setKarte({ ...karte, body: v }); }} hint={`${karte.body.length}/1000`} />
+                    <Select label="お悩みジャンル" value={queInfo.worry_category} onChange={(v) => setQueInfo({ ...querentInfo, worry_category: v })} options={SAMPLE_GENRES} />
+                    <Textarea label="お悩み内容 (1000文字以内)" value={queInfo.worry_message} onChange={(v) => { if (v.length <= 1000) setQueInfo({ ...queInfo, worry_message: v }); }} hint={`${queInfo.worry_message.length}/1000`} />
                     <div className="text-right text-xs text-white/70">保存は自動です</div>
                 </div>
             )}
