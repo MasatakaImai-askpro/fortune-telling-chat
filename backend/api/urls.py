@@ -5,15 +5,26 @@ from .views import (
     QuerentRegistrationView,
     FortunetellerRegistrationView,
     UserLogin,
+    UserLogout,
+    UserLoginInfo,
     GETFortuneTeller,
     FortunetellerInfo,
     FortunetellerBankInfo,
-    chatRoomInfo
+    chatRoomInfo,
+    FortunetellerChatInfo,
+    FortunetellerChatMessage,
+    sendDM,
+    QuerentInfo,
+    QuerentChatMessage
 )
 
 urlpatterns = [
     path("users/", HelloView.as_view()),
     path("user_login/", UserLogin.as_view()),
+    path("user_logout/", UserLogout.as_view()),
+    path("get_login_info/", UserLoginInfo.as_view()),
+    path("get_querent_info/", QuerentInfo.as_view()),
+    path("get_chat_message/", QuerentChatMessage.as_view()),
     path("create_querent_user/", QuerentRegistrationView.as_view()),
     path("create_fortune_user/", FortunetellerRegistrationView.as_view()),
     path("get_fortuneteller_all/", GETFortuneTeller.as_view()),
@@ -23,4 +34,7 @@ urlpatterns = [
     path("edit_querent_karte/", QuerentKarteView.as_view()),
     path("edit_fortuneteller_pro/", FortunetellerInfo.as_view()),
     path("edit_fortuneteller_bank_info/",FortunetellerBankInfo.as_view()),
+    path("get_fortuneteller_room_info/",FortunetellerChatInfo.as_view()),
+    path("get_fortuneteller_room_messages/", FortunetellerChatMessage.as_view()),
+    path("dm_simultaneous_transmission/", sendDM.as_view()),
 ]
