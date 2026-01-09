@@ -1,4 +1,4 @@
-from django.urls import path, re_path, include
+from django.urls import path
 from .views import (
     HelloView,
     QuerentKarteView,
@@ -17,7 +17,6 @@ from .views import (
     QuerentInfo,
     QuerentChatMessage
 )
-from django.views.generic import TemplateView
 
 urlpatterns = [
     path("users/", HelloView.as_view()),
@@ -38,8 +37,4 @@ urlpatterns = [
     path("get_fortuneteller_room_info/",FortunetellerChatInfo.as_view()),
     path("get_fortuneteller_room_messages/", FortunetellerChatMessage.as_view()),
     path("dm_simultaneous_transmission/", sendDM.as_view()),
-]
-
-urlpatterns += [
-    re_path(r"^(?!api/).*", TemplateView.as_view(template_name="index.html")),
 ]
