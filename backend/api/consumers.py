@@ -178,7 +178,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 cost_pt=point
             )
             que_prof = QuerentProfile.objects.get(user=user)
-            que_obj = 
+            # que_obj = 
             return message_obj
     
     def save_length_paying_message(self, room, user, sender, text):
