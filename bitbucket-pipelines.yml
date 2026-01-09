@@ -36,7 +36,7 @@ pipelines:
             - mkdir -p /tmp/pkg
             - tar -czf /tmp/pkg/app.tar.gz --exclude-vcs --exclude=frontend/node_modules --exclude=backend/.venv .
             - mv /tmp/pkg/app.tar.gz app.tar.gz
-            - tar -tzf app.tar.gz | grep -i procfile || (echo "Procfile not found in tar!" && exit 1)
+            - tar -tzf app.tar.gz | grep -E '^(\./)?Procfile$' || (echo "Procfile (capital P) not found in tar!" && exit 1)
             - tar -tzf app.tar.gz | head -n 30
             - ls -lah app.tar.gz
 
