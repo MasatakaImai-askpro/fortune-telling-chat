@@ -291,7 +291,7 @@ export default function AdvisorApp() {
 
         // const wsUrl = `${wsScheme}://${window.location.host}/ws/chat/${selectedRoom.id}/`;
         const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-        const wsUrl = `${wsScheme}://${window.location.hostname}:8000/ws/chat/${selectedRoom.id}/`;
+        const wsUrl = `${wsScheme}://${window.location.host}/ws/chat/${selectedRoom.id}/`;
         
         console.log("WS URL:", wsUrl);
         console.log(document.cookie);
