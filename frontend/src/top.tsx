@@ -432,7 +432,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                 });
                 if (!res.ok) throw new Error ("failed");
                 const data = await res.json();
-                if (data){
+                if (data?.id){
                     setRoom({ id: data.id});
                 } else {
                     setRoom(null)
@@ -452,9 +452,17 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     if (!advisor) return;
 
     const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = room
-        ? `${wsScheme}://${window.location.host}/ws/chat/${room.id}/`
-        : `${wsScheme}://${window.location.host}/ws/chat/fortuneteller/${advisor.id}/`;
+    // const wsUrl = room
+    //     ? `${wsScheme}://${window.location.host}/ws/chat/${room.id}/`
+    //     : `${wsScheme}://${window.location.host}/ws/chat/fortuneteller/${advisor.id}/`;
+    const wsUrl = room?.id
+    ? `${wsScheme}://${window.location.host}/ws/chat/${room.id}/`
+    : advisor?.id
+        ? `${wsScheme}://${window.location.host}/ws/chat/fortuneteller/${advisor.id}/`
+        : null;
+
+    if (!wsUrl) return;
+    if (wsUrl.includes("/null/")) return;
 
     const sock = new WebSocket(wsUrl);
     socketRef.current = sock;
