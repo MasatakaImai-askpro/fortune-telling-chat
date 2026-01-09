@@ -25,6 +25,13 @@ pipelines:
             - mkdir -p backend/static/frontend
             - cp -R frontend/dist/* backend/static/frontend/
 
+            # copy dist into backend
+            - rm -rf backend/static/assets backend/templates/index.html
+            - mkdir -p backend/static backend/templates
+
+            - cp frontend/dist/index.html backend/templates/index.html
+            - cp -R frontend/dist/assets backend/static/assets
+
             # create tarball OUTSIDE project dir
             - mkdir -p /tmp/pkg
             - tar -czf /tmp/pkg/app.tar.gz --exclude-vcs --exclude=frontend/node_modules --exclude=backend/.venv .
