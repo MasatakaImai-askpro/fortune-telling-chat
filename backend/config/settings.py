@@ -83,14 +83,24 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = "api.config.asgi.application"
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("localhost", 6379)],
+REDISCLOUD_URL = os.getenv("REDISCLOUD_URL")
+
+if REDISCLOUD_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [REDISCLOUD_URL]},
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [("localhost", 6379)],
+            },
         },
-    },
-}
+    }
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
