@@ -36,11 +36,7 @@ pipelines:
 
             # create tarball OUTSIDE project dir
             - mkdir -p /tmp/pkg
-            - tar -czf /tmp/pkg/app.tar.gz \
-                --exclude-vcs \
-                --exclude=frontend/node_modules \
-                --exclude=backend/.venv \
-                .
+            - tar -czf /tmp/pkg/app.tar.gz --exclude-vcs --exclude=frontend/node_modules --exclude=backend/.venv .
             - mv /tmp/pkg/app.tar.gz app.tar.gz
 
             # check Procfile exists (capital P)
