@@ -13,7 +13,6 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
-const isProduction = app.get("env") === "production";
 const PgStore = connectPgSimple(session);
 const sessionMiddleware = session({
   store: new PgStore({ pool, createTableIfMissing: true }),
@@ -21,12 +20,10 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7,
-    sameSite: isProduction ? "none" as const : "lax" as const,
+    sameSite: "lax" as const,
   },
-  proxy: isProduction,
 });
 
 app.use(sessionMiddleware);
