@@ -332,6 +332,55 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  app.get("/api/all_querents", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const profiles = await storage.getAllQuerentProfiles();
+      const list = profiles.map((p) => ({
+        user_id: p.userId,
+        name: p.name,
+        zodiac_sign: p.zodiacSign,
+        worry_category: p.worryCategory,
+        worry_message: p.worryMessage,
+        birthdate: p.birthdate,
+        points: p.points,
+      }));
+      res.json(list);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/send_bulk_message", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+
+      const schema = z.object({
+        querent_ids: z.array(z.number()).min(1, "送信先を1人以上選択してください"),
+        text: z.string().min(1, "メッセージを入力してください").max(150, "メッセージは150文字以内で入力してください"),
+      });
+      const parsed = schema.parse(req.body);
+
+      const results = [];
+      for (const querentId of parsed.querent_ids) {
+        const room = await storage.getOrCreateRoom(user.id, querentId);
+        const msg = await storage.createMessage({
+          roomId: room.id,
+          sender: "fortuneteller",
+          text: parsed.text,
+        });
+        results.push({ querent_id: querentId, room_id: room.id, message_id: msg.id });
+      }
+
+      res.status(201).json({ message: `${results.length}名にメッセージを送信しました`, results });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors[0]?.message || "入力エラー" });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/get_fortuneteller_all", async (_req: Request, res: Response) => {
     try {
       const profiles = await storage.getAllFortunetellerProfiles();

@@ -195,41 +195,125 @@ wss.on("connection", async (ws, req) => {
 
 async function seedDatabase() {
   try {
-    const existing = await storage.getUserByEmail("test_querent@example.com");
+    const existing = await storage.getUserByEmail("querent01@example.com");
     if (existing) return;
 
-    log("Seeding database with test accounts...");
+    log("Seeding database with 30 fortunetellers and 30 querents...");
     const hashedPassword = await bcrypt.hash("Test1234", 10);
 
-    const querentUser = await storage.createUser({ email: "test_querent@example.com", password: hashedPassword, role: "1" });
-    await storage.createQuerentProfile({
-      userId: querentUser.id,
-      name: "テスト太郎",
-      telNumber: "09012345678",
-      postalCode: "1000001",
-      address: "東京都千代田区",
-      birthdate: "1990-01-01",
-      zodiacSign: "山羊座",
-      birthplace: "東京",
-      birthtime: "12:00",
-      worryCategory: "love",
-      worryMessage: "",
-      points: 1000,
-    });
+    const ftNames = [
+      { name: "月影みやび", headline: "月の導きで未来を照らす", intro: "タロットと西洋占星術を組み合わせた独自の鑑定スタイルで、恋愛運を中心にお悩みを解決します。" },
+      { name: "星宮れいな", headline: "星が語る真実の道標", intro: "霊感タロットで15年の実績。複雑な恋愛や不倫相談もお任せください。" },
+      { name: "天河すみれ", headline: "心の奥の声を聴きます", intro: "チャネリングとオラクルカードで、あなたの魂が本当に望んでいることをお伝えします。" },
+      { name: "紫月かおり", headline: "紫の月が示す運命", intro: "四柱推命と手相の二刀流。仕事運・転職相談に定評があります。" },
+      { name: "風花ひなた", headline: "風に乗せて幸せを届ける", intro: "数秘術とカラーセラピーで、あなたの人生のテーマカラーを見つけます。" },
+      { name: "蒼空あかり", headline: "蒼い空に希望の光を", intro: "ルノルマンカードとダウジングで具体的な時期や方向をお伝えします。" },
+      { name: "桜庭ゆき", headline: "桜舞う春を呼び込む", intro: "九星気学と風水で開運アドバイス。引っ越し・旅行方位もご相談ください。" },
+      { name: "水鏡なぎさ", headline: "水面に映る本当の姿", intro: "透視能力で相手の気持ちを読み取ります。片思い・復縁相談が得意です。" },
+      { name: "暁月りん", headline: "夜明けの月に願いを", intro: "西洋占星術とアロマテラピーを融合。心と体のバランスを整えます。" },
+      { name: "雪乃しずく", headline: "静かに降る雪のように", intro: "易占いと霊感で、仕事・人間関係の悩みに具体的なアドバイスをお届けします。" },
+      { name: "翠川まこと", headline: "翠の風が吹く場所へ", intro: "インド占星術と宝石療法の専門家。金運アップのお守りも承ります。" },
+      { name: "朝霧えみ", headline: "霧が晴れると未来が見える", intro: "サイキックリーディングで10年以上の経験。ペットの気持ちも読めます。" },
+      { name: "夕凪そら", headline: "夕凪の海に答えがある", intro: "マヤ暦とKIN診断で、あなたの生まれ持った才能と使命をお伝えします。" },
+      { name: "花宮あずさ", headline: "花が咲く時を見逃さない", intro: "タロットカードと夢占いの組み合わせで、潜在意識からのメッセージを解読します。" },
+      { name: "琴音はるか", headline: "心の琴線に触れる鑑定", intro: "ルーン占いとクリスタルヒーリングで心の傷を癒しながら未来を占います。" },
+      { name: "白雪まひろ", headline: "純白の雪が道を示す", intro: "姓名判断と画数占いの専門家。改名・命名のご相談も多数実績があります。" },
+      { name: "結城あおい", headline: "結ばれる縁を見つける", intro: "縁結び専門の占い師。赤い糸リーディングで運命の人との出会い時期をお伝えします。" },
+      { name: "霞月のぞみ", headline: "霞の向こうの希望の光", intro: "アカシックレコードリーディングで前世からの課題と今世の使命を読み解きます。" },
+      { name: "鈴音ことは", headline: "鈴の音が幸運を呼ぶ", intro: "算命学と紫微斗数で運勢の流れを詳細に分析。来年の運勢が気になる方へ。" },
+      { name: "夢路みさき", headline: "夢への道を照らします", intro: "ヒプノセラピーと前世療法で、心のブロックを解放するお手伝いをします。" },
+      { name: "凛華せつな", headline: "凛と咲く花のように", intro: "断易と梅花心易で、YES/NOの明確な答えをお出しします。決断に迷う方へ。" },
+      { name: "天音みこと", headline: "天の音色を届けます", intro: "ボイスリーディングで声のエネルギーから運勢を読み取る独自の鑑定法です。" },
+      { name: "深雪かなで", headline: "深い雪の下の温もり", intro: "ジオマンシーと砂占いで、土地のエネルギーと相性を鑑定します。" },
+      { name: "光風あすか", headline: "光の風に乗って飛ぶ", intro: "エンジェルカードとフェアリーカードで、守護天使からのメッセージをお届けします。" },
+      { name: "椿月さやか", headline: "椿の花言葉は理想の愛", intro: "宿曜占星術で相性診断。ビジネスパートナーや結婚相手との相性を詳しく鑑定。" },
+      { name: "朝陽のどか", headline: "朝の光が心を温める", intro: "カバラ数秘術と生命の樹で、人生の設計図を読み解きます。" },
+      { name: "真珠みなみ", headline: "真珠のような輝きを", intro: "水晶玉占いとスクライングで、ビジョンとして未来の映像をお伝えします。" },
+      { name: "虹色ひかる", headline: "七色の虹を架ける占い", intro: "オーラリーディングとチャクラ診断で、心身のエネルギーバランスを整えます。" },
+      { name: "月白うらら", headline: "月白に照らされる道", intro: "ホラリー占星術で、質問に対する的確な答えを天体の配置から導き出します。" },
+      { name: "風月あやめ", headline: "風と月が紡ぐ物語", intro: "トートタロットとカバラの融合鑑定。スピリチュアルな成長をサポートします。" },
+    ];
 
-    const fortuneUser = await storage.createUser({ email: "test_fortune@example.com", password: hashedPassword, role: "2" });
-    await storage.createFortunetellerProfile({
-      userId: fortuneUser.id,
-      name: "占い花子",
-      rank: "SILVER",
-      profileImage: "",
-      iconImage: "",
-      headline: "あなたの未来を照らします",
-      intro: "霊視とタロットを得意とする占い師です。恋愛相談を中心に、仕事や人間関係のお悩みにも対応いたします。",
-      isRecommended: false,
-    });
+    const ranks = ["SILVER", "GOLD", "PLATINUM"];
+    for (let i = 0; i < 30; i++) {
+      const idx = String(i + 1).padStart(2, "0");
+      const ft = ftNames[i];
+      const user = await storage.createUser({ email: `fortune${idx}@example.com`, password: hashedPassword, role: "2" });
+      await storage.createFortunetellerProfile({
+        userId: user.id,
+        name: ft.name,
+        rank: ranks[i % 3],
+        profileImage: "",
+        iconImage: "",
+        headline: ft.headline,
+        intro: ft.intro,
+        isRecommended: i < 5,
+      });
+    }
 
-    log("Database seeded successfully.");
+    const qNames = [
+      { name: "田中美咲", zodiac: "牡羊座", worry: "love", msg: "彼との関係に悩んでいます" },
+      { name: "佐藤健太", zodiac: "牡牛座", worry: "work", msg: "転職すべきか迷っています" },
+      { name: "鈴木あかり", zodiac: "双子座", worry: "love", msg: "片思いの相手に告白すべきか" },
+      { name: "高橋翔太", zodiac: "蟹座", worry: "money", msg: "投資を始めるタイミングについて" },
+      { name: "伊藤さくら", zodiac: "獅子座", worry: "human", msg: "職場の人間関係で悩んでいます" },
+      { name: "渡辺大地", zodiac: "乙女座", worry: "health", msg: "体調管理のアドバイスが欲しい" },
+      { name: "山本花音", zodiac: "天秤座", worry: "love", msg: "復縁したい相手がいます" },
+      { name: "中村拓海", zodiac: "蠍座", worry: "work", msg: "起業するかどうか悩んでいます" },
+      { name: "小林美月", zodiac: "射手座", worry: "love", msg: "遠距離恋愛の不安を解消したい" },
+      { name: "加藤蓮", zodiac: "山羊座", worry: "money", msg: "貯金が増えない原因を知りたい" },
+      { name: "吉田陽菜", zodiac: "水瓶座", worry: "human", msg: "友人との距離感に悩んでいます" },
+      { name: "山田悠真", zodiac: "魚座", worry: "work", msg: "やりたいことが見つからない" },
+      { name: "松本心優", zodiac: "牡羊座", worry: "love", msg: "結婚のタイミングを知りたい" },
+      { name: "井上颯太", zodiac: "牡牛座", worry: "health", msg: "ストレスの解消法を教えて" },
+      { name: "木村七海", zodiac: "双子座", worry: "love", msg: "彼の浮気が心配です" },
+      { name: "林凛太朗", zodiac: "蟹座", worry: "work", msg: "昇進できるか知りたい" },
+      { name: "清水結衣", zodiac: "獅子座", worry: "money", msg: "副業を始めるべきか" },
+      { name: "斎藤大翔", zodiac: "乙女座", worry: "human", msg: "家族との関係を改善したい" },
+      { name: "藤田莉子", zodiac: "天秤座", worry: "love", msg: "出会いの場が欲しい" },
+      { name: "岡田悠人", zodiac: "蠍座", worry: "work", msg: "資格取得のアドバイスが欲しい" },
+      { name: "石川芽依", zodiac: "射手座", worry: "love", msg: "元カレのことが忘れられない" },
+      { name: "前田陸", zodiac: "山羊座", worry: "money", msg: "今年の金運を知りたい" },
+      { name: "小川紬", zodiac: "水瓶座", worry: "health", msg: "睡眠の質を上げたい" },
+      { name: "後藤奏太", zodiac: "魚座", worry: "human", msg: "上司との付き合い方に悩み" },
+      { name: "近藤葵", zodiac: "牡羊座", worry: "love", msg: "婚活がうまくいかない" },
+      { name: "坂本瑛斗", zodiac: "牡牛座", worry: "work", msg: "海外転勤の話が来ています" },
+      { name: "遠藤凛", zodiac: "双子座", worry: "love", msg: "年の差恋愛について相談したい" },
+      { name: "青木湊", zodiac: "蟹座", worry: "money", msg: "引っ越し先の家賃について" },
+      { name: "西村詩", zodiac: "獅子座", worry: "human", msg: "ママ友との関係に疲れました" },
+      { name: "村上陽太", zodiac: "乙女座", worry: "work", msg: "定年後の過ごし方が不安" },
+    ];
+
+    const addresses = [
+      "東京都渋谷区", "大阪府大阪市北区", "愛知県名古屋市中区", "福岡県福岡市博多区", "北海道札幌市中央区",
+      "宮城県仙台市青葉区", "広島県広島市中区", "京都府京都市下京区", "兵庫県神戸市中央区", "千葉県千葉市中央区",
+    ];
+    const birthplaces = ["東京", "大阪", "名古屋", "福岡", "札幌", "仙台", "広島", "京都", "神戸", "千葉"];
+
+    for (let i = 0; i < 30; i++) {
+      const idx = String(i + 1).padStart(2, "0");
+      const q = qNames[i];
+      const year = 1980 + (i % 20);
+      const month = String((i % 12) + 1).padStart(2, "0");
+      const day = String((i % 28) + 1).padStart(2, "0");
+      const user = await storage.createUser({ email: `querent${idx}@example.com`, password: hashedPassword, role: "1" });
+      await storage.createQuerentProfile({
+        userId: user.id,
+        name: q.name,
+        telNumber: `090${String(10000000 + i * 111111).slice(0, 8)}`,
+        postalCode: `${100 + i}0001`,
+        address: addresses[i % 10],
+        birthdate: `${year}-${month}-${day}`,
+        zodiacSign: q.zodiac,
+        birthplace: birthplaces[i % 10],
+        birthtime: `${String(6 + (i % 12)).padStart(2, "0")}:${String((i * 7) % 60).padStart(2, "0")}`,
+        worryCategory: q.worry,
+        worryMessage: q.msg,
+        points: 500 + (i * 50),
+      });
+    }
+
+    log("Database seeded with 30 fortunetellers and 30 querents.");
   } catch (e: any) {
     log(`Seed skipped or failed: ${e.message}`);
   }

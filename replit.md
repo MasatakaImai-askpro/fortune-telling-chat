@@ -61,6 +61,8 @@ client/
 - GET/PATCH `/api/my_bank_info` - Own bank info management
 - GET `/api/my_rooms` - List chat rooms
 - POST `/api/send_dm` - Send DM to fortuneteller
+- GET `/api/all_querents` - List all querent profiles (fortuneteller auth required)
+- POST `/api/send_bulk_message` - Send message to multiple querents (fortuneteller auth, max 150 chars)
 
 ## WebSocket
 - Connect to `/ws?room_id=X` or `/ws?fortuneteller_id=X`
@@ -82,6 +84,18 @@ client/
 - Genre chip filtering (恋愛/仕事/人間関係/金運/健康)
 - Data fetching: TanStack Query for advisors and querent info
 
+## Advisor Dashboard Features (advisor-app.tsx)
+- Bottom navigation: Chat / Querent List / Profile / Bank (4 tabs)
+- Chat tab: Room list with real-time WebSocket messaging
+- Querent List tab: View all 30 querents, search/filter, multi-select, send bulk messages (150 char limit)
+- Profile tab: Edit fortuneteller name, headline, intro
+- Bank tab: Edit bank account details
+
+## Test Data
+- 30 fortunetellers: fortune01@example.com ~ fortune30@example.com (password: Test1234)
+- 30 querents: querent01@example.com ~ querent30@example.com (password: Test1234)
+- Auto-seeded on first startup if database is empty
+
 ## Recent Changes
 - 2026-02-06: Complete migration from Django + separate Vite to Express + integrated Vite
 - 2026-02-06: Removed old Django backend and separate frontend directories
@@ -89,3 +103,4 @@ client/
 - 2026-02-06: Added new API endpoints (get_querent_info, edit_querent_karte, edit_querent_info, get_room, get_fortuneteller_all) with Zod validation
 - 2026-02-06: Rewrote top.tsx with bottom navigation, favorites, ranking carousels, genre filtering, point consumption modal, account management
 - 2026-02-06: Refactored data fetching to use TanStack Query with proper cache invalidation
+- 2026-02-06: Added 30 fortuneteller + 30 querent test data seed, bulk message API, querent list tab in advisor dashboard

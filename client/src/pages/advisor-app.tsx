@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard } from "lucide-react";
+import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search } from "lucide-react";
 
 type Room = {
   id: string;
@@ -39,6 +39,16 @@ type BankInfo = {
   account_type: string;
   account_number: string;
   account_holder_name: string;
+};
+
+type Querent = {
+  user_id: number;
+  name: string;
+  zodiac_sign: string;
+  worry_category: string;
+  worry_message: string;
+  birthdate: string;
+  points: number;
 };
 
 function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
@@ -256,6 +266,197 @@ function ProfileSettings() {
   );
 }
 
+const worryCategoryLabel: Record<string, string> = {
+  love: "恋愛", work: "仕事", money: "金運", health: "健康", human: "人間関係", other: "その他",
+};
+
+function QuerentListView() {
+  const queryClient = useQueryClient();
+  const { data: querents, isLoading } = useQuery<Querent[]>({ queryKey: ["/api/all_querents"] });
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [messageText, setMessageText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+
+  const filtered = (querents ?? []).filter((q) => {
+    const matchSearch = !searchTerm || q.name.includes(searchTerm) || q.worry_message.includes(searchTerm);
+    const matchCategory = filterCategory === "all" || q.worry_category === filterCategory;
+    return matchSearch && matchCategory;
+  });
+
+  function toggleSelect(userId: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((q) => q.user_id)));
+    }
+  }
+
+  async function handleSend() {
+    if (selected.size === 0 || !messageText.trim()) return;
+    try {
+      setSending(true);
+      await apiRequest("POST", "/api/send_bulk_message", {
+        querent_ids: Array.from(selected),
+        text: messageText.trim(),
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
+      setSent(true);
+      setMessageText("");
+      setSelected(new Set());
+      setTimeout(() => setSent(false), 5000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-white/50 text-sm">読み込み中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="px-4 pt-3 pb-2 space-y-2 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="名前・お悩みで検索..."
+              data-testid="input-querent-search"
+              className="w-full rounded-xl bg-white/10 border border-white/20 pl-9 pr-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {[{ value: "all", label: "全て" }, { value: "love", label: "恋愛" }, { value: "work", label: "仕事" }, { value: "money", label: "金運" }, { value: "health", label: "健康" }, { value: "human", label: "人間関係" }].map((c) => (
+            <button
+              key={c.value}
+              onClick={() => setFilterCategory(c.value)}
+              data-testid={`filter-${c.value}`}
+              className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
+                filterCategory === c.value
+                  ? "bg-fuchsia-600 border-fuchsia-500 text-white"
+                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between text-xs text-white/50">
+          <button onClick={toggleSelectAll} className="flex items-center gap-1 hover:text-white/80 transition-colors" data-testid="button-select-all">
+            {selected.size === filtered.length && filtered.length > 0 ? <CheckSquare className="w-4 h-4 text-fuchsia-400" /> : <Square className="w-4 h-4" />}
+            <span>{selected.size === filtered.length && filtered.length > 0 ? "全解除" : "全選択"}</span>
+          </button>
+          <span data-testid="text-selected-count">{selected.size}名選択中 / {filtered.length}名</span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="container-querent-list">
+        {filtered.length === 0 ? (
+          <div className="text-center text-white/40 text-sm pt-12">
+            <Users className="w-8 h-8 mx-auto mb-3 text-fuchsia-400/50" />
+            <p>該当する相談者がいません</p>
+          </div>
+        ) : (
+          filtered.map((q) => (
+            <div
+              key={q.user_id}
+              onClick={() => toggleSelect(q.user_id)}
+              className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 cursor-pointer transition-colors ${
+                selected.has(q.user_id) ? "bg-fuchsia-900/20" : "hover:bg-white/5"
+              }`}
+              data-testid={`querent-row-${q.user_id}`}
+            >
+              <div className="pt-0.5">
+                {selected.has(q.user_id) ? (
+                  <CheckSquare className="w-5 h-5 text-fuchsia-400" />
+                ) : (
+                  <Square className="w-5 h-5 text-white/30" />
+                )}
+              </div>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                {q.name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold" data-testid={`text-querent-name-${q.user_id}`}>{q.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/60">{q.zodiac_sign}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">
+                    {worryCategoryLabel[q.worry_category] || q.worry_category}
+                  </span>
+                </div>
+                {q.worry_message && (
+                  <div className="text-xs text-white/50 mt-0.5 truncate" data-testid={`text-querent-worry-${q.user_id}`}>{q.worry_message}</div>
+                )}
+                <div className="text-[10px] text-white/30 mt-0.5">
+                  生年月日: {q.birthdate} / {q.points}pt
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {(selected.size > 0 || sent) && (
+        <div className="border-t border-white/10 bg-[#0d1a33] p-3 space-y-2">
+          {sent && (
+            <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2" data-testid="text-sent-success">
+              メッセージを送信しました
+            </div>
+          )}
+          {selected.size > 0 && (
+            <>
+              <div className="flex items-center gap-1 text-xs text-white/50">
+                <span>{selected.size}名に送信</span>
+                <span className="ml-auto">{messageText.length}/150</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={messageText}
+                  onChange={(e) => { if (e.target.value.length <= 150) setMessageText(e.target.value); }}
+                  placeholder="メッセージを入力（150文字以内）..."
+                  data-testid="input-bulk-message"
+                  className="flex-1 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={sending || !messageText.trim()}
+                  data-testid="button-send-bulk"
+                  className="w-9 h-9 rounded-full bg-fuchsia-600 hover:bg-fuchsia-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  <Send className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BankSettings() {
   const { data: bank } = useQuery<BankInfo>({ queryKey: ["/api/my_bank_info"] });
   const queryClient = useQueryClient();
@@ -314,7 +515,7 @@ function BankSettings() {
 export default function AdvisorApp() {
   const { user, loading, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
-  const [tab, setTab] = useState<"chat" | "profile" | "bank">("chat");
+  const [tab, setTab] = useState<"chat" | "querents" | "profile" | "bank">("chat");
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   const { data: rooms } = useQuery<Room[]>({
@@ -363,6 +564,8 @@ export default function AdvisorApp() {
           <ChatView room={selectedRoom} onBack={() => setSelectedRoom(null)} />
         ) : tab === "chat" ? (
           <RoomList rooms={rooms ?? []} onSelect={setSelectedRoom} />
+        ) : tab === "querents" ? (
+          <QuerentListView />
         ) : tab === "profile" ? (
           <ProfileSettings />
         ) : (
@@ -373,6 +576,7 @@ export default function AdvisorApp() {
       <nav className="flex border-t border-white/10 bg-[#0d1a33]">
         {([
           { key: "chat" as const, icon: MessageCircle, label: "チャット" },
+          { key: "querents" as const, icon: Users, label: "相談者一覧" },
           { key: "profile" as const, icon: Settings, label: "プロフィール" },
           { key: "bank" as const, icon: CreditCard, label: "口座設定" },
         ]).map(({ key, icon: Icon, label }) => (

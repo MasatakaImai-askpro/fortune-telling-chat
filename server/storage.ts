@@ -21,6 +21,7 @@ export interface IStorage {
   updateFortunetellerProfile(userId: number, data: Partial<InsertFortunetellerProfile>): Promise<FortunetellerProfile | undefined>;
 
   getQuerentProfile(userId: number): Promise<QuerentProfile | undefined>;
+  getAllQuerentProfiles(): Promise<QuerentProfile[]>;
   createQuerentProfile(profile: InsertQuerentProfile): Promise<QuerentProfile>;
   updateQuerentProfile(userId: number, data: Partial<InsertQuerentProfile>): Promise<QuerentProfile | undefined>;
 
@@ -76,6 +77,10 @@ export class DatabaseStorage implements IStorage {
   async getQuerentProfile(userId: number): Promise<QuerentProfile | undefined> {
     const [profile] = await db.select().from(querentProfiles).where(eq(querentProfiles.userId, userId));
     return profile;
+  }
+
+  async getAllQuerentProfiles(): Promise<QuerentProfile[]> {
+    return db.select().from(querentProfiles);
   }
 
   async createQuerentProfile(profile: InsertQuerentProfile): Promise<QuerentProfile> {
