@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import {
   users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions,
   type User, type InsertUser,
@@ -38,6 +38,8 @@ export interface IStorage {
   getMessagesByRoom(roomId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   createMessages(msgs: InsertMessage[]): Promise<Message[]>;
+
+  deductPoints(userId: number, amount: number): Promise<boolean>;
 
   getActiveSubscription(querentId: number): Promise<Subscription | undefined>;
   createSubscription(sub: InsertSubscription): Promise<Subscription>;
@@ -153,6 +155,14 @@ export class DatabaseStorage implements IStorage {
     if (msgs.length === 0) return [];
     return db.insert(messages).values(msgs).returning();
   }
+  async deductPoints(userId: number, amount: number): Promise<boolean> {
+    const result = await db.update(querentProfiles)
+      .set({ points: sql`${querentProfiles.points} - ${amount}` })
+      .where(and(eq(querentProfiles.userId, userId), gte(querentProfiles.points, amount)))
+      .returning();
+    return result.length > 0;
+  }
+
   async getActiveSubscription(querentId: number): Promise<Subscription | undefined> {
     const now = new Date();
     const rows = await db.select().from(subscriptions)

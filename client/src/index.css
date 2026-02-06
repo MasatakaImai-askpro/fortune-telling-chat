@@ -104,6 +104,10 @@
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  [class*="replit-dev-banner"],
+  #replit-badge,
+  a[href*="replit.com"][style*="fixed"],
+  div[style*="fixed"][style*="replit"] { display: none !important; }
   .dm-modal-overlay {
     position: fixed;
     inset: 0;

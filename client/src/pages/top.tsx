@@ -343,6 +343,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [costToConfirm, setCostToConfirm] = useState<number | null>(null);
+  const [isFromTemplate, setIsFromTemplate] = useState(false);
   const [roomLoading, setRoomLoading] = useState(true);
   const [room, setRoom] = useState<{ id: string } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -404,28 +405,28 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
 
   if (!advisor) return <section className="py-12 text-center text-white/70">まず占い師を選んでください（ホームまたは「占い師」から）。</section>;
 
-  const executeSend = (cost: number) => {
-    if (!(plan === "subscription" && subscriptionActive)) setPoints((p) => p - cost);
-    const payload: any = { type: "chat_message", sender: "querent", text: text.trim(), attachments: uploads };
+  const executeSend = (cost: number, free: boolean) => {
+    if (!free && !(plan === "subscription" && subscriptionActive)) setPoints((p) => p - cost);
+    const payload: any = { type: "chat_message", sender: "querent", text: text.trim(), attachments: uploads, free };
     if (!room) payload.advisor_id = advisor.id;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(payload));
     } else { console.warn("WebSocket not open"); }
-    setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false);
+    setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false); setIsFromTemplate(false);
   };
 
-  const onSend = ({ isFreeTemplate = false } = {}) => {
+  const onSend = () => {
     const trimmed = text.trim();
     if (trimmed === "" && uploads.length === 0) return;
+    if (isFromTemplate) { executeSend(0, true); return; }
+    if (plan === "subscription" && subscriptionActive) { executeSend(0, false); return; }
     const rankInfo = getRankInfo(advisor.rank);
-    const cost = isFreeTemplate ? 0 : trimmed.length * rankInfo.mult;
-    if (plan === "subscription" && subscriptionActive) { executeSend(0); return; }
+    const cost = trimmed.length * rankInfo.mult;
     if (points < cost) { alert(`ポイントが不足しています。必要: ${cost}pt。ポイントを購入してください。`); return; }
-    if (isFreeTemplate) { executeSend(0); return; }
     setCostToConfirm(cost);
   };
 
-  const onConfirmSend = () => { if (costToConfirm !== null) executeSend(costToConfirm); };
+  const onConfirmSend = () => { if (costToConfirm !== null) executeSend(costToConfirm, false); };
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files; if (!files || !files.length) return;
     const newUploads = Array.from(files).map((f) => {
@@ -436,7 +437,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     setUploads(newUploads); e.target.value = "";
   };
   const removeUpload = (i: number) => setUploads((prev) => prev.filter((_, idx) => idx !== i));
-  const applyTemplate = (t: string) => { setText(t); setShowTemplates(false); };
+  const applyTemplate = (t: string) => { setText(t); setShowTemplates(false); setIsFromTemplate(true); };
 
   if (roomLoading) return <div className="text-white/60 p-4">読み込み中...</div>;
 
@@ -509,7 +510,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           </div>
         )}
         <div className="bg-[#111a2e] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
-          <textarea value={text} onChange={(e) => { setText(e.target.value); if (showTemplates) setShowTemplates(false); }}
+          <textarea value={text} onChange={(e) => { setText(e.target.value); if (showTemplates) setShowTemplates(false); setIsFromTemplate(false); }}
             onFocus={() => { if (text.trim() === "" && uploads.length === 0) setShowTemplates(true); }}
             placeholder="ご相談内容を入力..." data-testid="input-chat-message"
             className="flex-1 bg-transparent outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50" />
@@ -532,10 +533,10 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             </IconBtn>
             <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={onFileChange} />
           </div>
-          <button onClick={() => onSend({ isFreeTemplate: false })} disabled={text.trim() === "" && uploads.length === 0}
+          <button onClick={onSend} disabled={text.trim() === "" && uploads.length === 0}
             className="rounded-xl bg-white text-gray-900 px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" data-testid="button-send-message"
-            title={plan === "subscription" && subscriptionActive ? "月額内" : `送信時 ${text.trim().length * getRankInfo(advisor?.rank || "SILVER").mult}pt 消費`}>
-            送信
+            title={isFromTemplate ? "無料テンプレ" : (plan === "subscription" && subscriptionActive ? "月額内" : `送信時 ${text.trim().length * getRankInfo(advisor?.rank || "SILVER").mult}pt 消費`)}>
+            {isFromTemplate ? "無料送信" : "送信"}
           </button>
         </div>
       </div>

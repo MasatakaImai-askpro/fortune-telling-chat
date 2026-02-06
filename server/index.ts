@@ -126,7 +126,7 @@ wss.on("connection", async (ws, req) => {
           text: m.text,
           created_at: m.createdAt.toISOString(),
           attachments: [],
-          free: false,
+          free: m.costPt === 0 && m.sender === "querent",
         })),
       }));
     } catch (e) {
@@ -135,11 +135,17 @@ wss.on("connection", async (ws, req) => {
   }
 
   ws.on("message", async (raw) => {
+    const RANK_MULT: Record<string, number> = { PLATINUM: 3, GOLD: 2, SILVER: 1 };
+    const SERVER_FREE_TEMPLATES = [
+      "はじめまして。最近悩んでいることがあり、ご相談させてください。",
+      "恋愛について占っていただきたいです。",
+      "仕事の転機が来ている気がします。アドバイスをお願いします。",
+    ];
     try {
       const data = JSON.parse(raw.toString());
       if (data.type !== "chat_message") return;
 
-      const { sender, text, category, point } = data;
+      const { sender, text, category, point, free: isFree } = data;
       let roomId = client.roomId;
 
       if (!roomId && client.fortunetellerId) {
@@ -153,6 +159,7 @@ wss.on("connection", async (ws, req) => {
 
       let costPt: number | null = null;
       let isLocked = false;
+      let msgFree = false;
 
       if (sender === "fortuneteller") {
         if (category === "length_paying") {
@@ -161,6 +168,29 @@ wss.on("connection", async (ws, req) => {
         } else if (category === "healing" && point) {
           costPt = Number(point);
           isLocked = true;
+        }
+      } else if (sender === "querent" && text) {
+        const isValidFreeTemplate = isFree && SERVER_FREE_TEMPLATES.includes(text.trim());
+        if (isValidFreeTemplate) {
+          msgFree = true;
+          costPt = 0;
+        } else {
+          const activeSub = await storage.getActiveSubscription(userId);
+          if (activeSub) {
+            costPt = 0;
+          } else {
+            const roomData = await storage.getRoom(roomId);
+            if (roomData) {
+              const ftProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
+              const mult = RANK_MULT[ftProfile?.rank || "SILVER"] || 1;
+              costPt = text.length * mult;
+              const deducted = await storage.deductPoints(userId, costPt);
+              if (!deducted) {
+                ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
+                return;
+              }
+            }
+          }
         }
       }
 
@@ -180,7 +210,7 @@ wss.on("connection", async (ws, req) => {
           text: msg.text,
           created_at: msg.createdAt.toISOString(),
           attachments: [],
-          free: false,
+          free: msgFree,
         },
       });
     } catch (e) {
