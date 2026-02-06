@@ -354,8 +354,33 @@ async function seedDatabase() {
   }
 }
 
+async function backfillStylesAndMethods() {
+  try {
+    const styles = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
+    const methods = ["手相", "タロット", "四柱推命", "占星術", "九星気学"];
+    const profiles = await storage.getAllFortunetellerProfiles();
+    let updated = 0;
+    for (let i = 0; i < profiles.length; i++) {
+      const p = profiles[i];
+      const needsStyle = !p.style || p.style === "";
+      const needsMethods = !p.divinationMethods || p.divinationMethods.length === 0;
+      if (needsStyle || needsMethods) {
+        const data: any = {};
+        if (needsStyle) data.style = styles[i % styles.length];
+        if (needsMethods) data.divinationMethods = [methods[i % 5], methods[(i + 2) % 5]].filter((v, j, a) => a.indexOf(v) === j);
+        await storage.updateFortunetellerProfile(p.userId, data);
+        updated++;
+      }
+    }
+    if (updated > 0) log(`Backfilled style/methods for ${updated} fortuneteller profiles.`);
+  } catch (e: any) {
+    log(`Backfill skipped: ${e.message}`);
+  }
+}
+
 (async () => {
   await seedDatabase();
+  await backfillStylesAndMethods();
 
   if (app.get("env") === "development") {
     await setupVite(app, server);
