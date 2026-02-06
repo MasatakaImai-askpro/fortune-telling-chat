@@ -44,6 +44,7 @@ client/
 - `bank_info` - bank account details for fortunetellers
 - `rooms` - chat rooms (fortuneteller_id + querent_id unique pair)
 - `messages` - chat messages with sender, text, cost_pt, is_locked
+- `subscriptions` - subscription records (querent_id, amount, status, start_date, end_date)
 
 ## API Routes
 - POST `/api/user_login` - Login with email/password/role
@@ -63,6 +64,9 @@ client/
 - POST `/api/send_dm` - Send DM to fortuneteller
 - GET `/api/all_querents` - List all querent profiles (fortuneteller auth required)
 - POST `/api/send_bulk_message` - Send message to multiple querents (fortuneteller auth, max 150 chars)
+- GET `/api/my_subscription` - Get active subscription status (querent auth)
+- POST `/api/subscribe` - Start 20,000 yen/30-day subscription (querent auth)
+- POST `/api/cancel_subscription` - Cancel active subscription (querent auth)
 
 ## WebSocket
 - Connect to `/ws?room_id=X` or `/ws?fortuneteller_id=X`
@@ -104,3 +108,4 @@ client/
 - 2026-02-06: Rewrote top.tsx with bottom navigation, favorites, ranking carousels, genre filtering, point consumption modal, account management
 - 2026-02-06: Refactored data fetching to use TanStack Query with proper cache invalidation
 - 2026-02-06: Added 30 fortuneteller + 30 querent test data seed, bulk message API, querent list tab in advisor dashboard
+- 2026-02-06: Added subscription system (20,000 yen/30 days) with subscribe/cancel APIs, subscription tracking in DB, point-free chat when subscribed

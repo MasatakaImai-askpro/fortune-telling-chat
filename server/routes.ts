@@ -249,6 +249,13 @@ export function registerRoutes(app: Express) {
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
       const profile = await storage.getQuerentProfile(user.id);
       if (!profile) return res.status(404).json({ error: "プロフィールが見つかりません" });
+
+      const activeSub = await storage.getActiveSubscription(user.id);
+      const isSubActive = !!activeSub;
+      if (profile.isSubscription !== isSubActive) {
+        await storage.updateQuerentProfile(user.id, { isSubscription: isSubActive });
+      }
+
       res.json({
         name: profile.name,
         email: user.email,
@@ -261,7 +268,8 @@ export function registerRoutes(app: Express) {
         birthtime: profile.birthtime,
         worry_category: profile.worryCategory,
         worry_message: profile.worryMessage,
-        subscription: profile.isSubscription,
+        subscription: isSubActive,
+        subscription_end_date: activeSub ? activeSub.endDate.toISOString() : null,
         point: profile.points,
       });
     } catch (e: any) {
@@ -397,6 +405,77 @@ export function registerRoutes(app: Express) {
         tags: [p.headline].filter(Boolean),
       }));
       res.json(list);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/my_subscription", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const sub = await storage.getActiveSubscription(user.id);
+      if (!sub) return res.json({ active: false, subscription: null });
+      res.json({
+        active: true,
+        subscription: {
+          id: sub.id,
+          amount: sub.amount,
+          start_date: sub.startDate.toISOString(),
+          end_date: sub.endDate.toISOString(),
+          status: sub.status,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/subscribe", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+
+      const existing = await storage.getActiveSubscription(user.id);
+      if (existing) return res.status(400).json({ error: "既にサブスクリプション契約中です" });
+
+      const now = new Date();
+      const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const sub = await storage.createSubscription({
+        querentId: user.id,
+        amount: 20000,
+        status: "active",
+        startDate: now,
+        endDate,
+      });
+
+      await storage.updateQuerentProfile(user.id, { isSubscription: true });
+
+      res.status(201).json({
+        message: "サブスクリプションを開始しました（20,000円/30日）",
+        subscription: {
+          id: sub.id,
+          amount: sub.amount,
+          start_date: sub.startDate.toISOString(),
+          end_date: sub.endDate.toISOString(),
+          status: sub.status,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/cancel_subscription", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+
+      const existing = await storage.getActiveSubscription(user.id);
+      if (!existing) return res.status(400).json({ error: "有効なサブスクリプションがありません" });
+
+      await storage.cancelSubscription(user.id);
+      res.json({ message: "サブスクリプションを解約しました" });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

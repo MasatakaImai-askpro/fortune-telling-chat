@@ -67,12 +67,23 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  querentId: integer("querent_id").notNull().references(() => querentProfiles.userId, { onDelete: "cascade" }),
+  amount: integer("amount").notNull().default(20000),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  startDate: timestamp("start_date").defaultNow().notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertFortunetellerProfileSchema = createInsertSchema(fortunetellerProfiles).omit({ createdAt: true });
 export const insertQuerentProfileSchema = createInsertSchema(querentProfiles).omit({ createdAt: true });
 export const insertBankInfoSchema = createInsertSchema(bankInfo);
 export const insertRoomSchema = createInsertSchema(rooms).omit({ id: true, createdAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -86,3 +97,5 @@ export type Room = typeof rooms.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;

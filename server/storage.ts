@@ -1,13 +1,14 @@
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
 import {
-  users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages,
+  users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions,
   type User, type InsertUser,
   type FortunetellerProfile, type InsertFortunetellerProfile,
   type QuerentProfile, type InsertQuerentProfile,
   type BankInfo, type InsertBankInfo,
   type Room, type InsertRoom,
   type Message, type InsertMessage,
+  type Subscription, type InsertSubscription,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -37,6 +38,10 @@ export interface IStorage {
   getMessagesByRoom(roomId: string): Promise<Message[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   createMessages(msgs: InsertMessage[]): Promise<Message[]>;
+
+  getActiveSubscription(querentId: number): Promise<Subscription | undefined>;
+  createSubscription(sub: InsertSubscription): Promise<Subscription>;
+  cancelSubscription(querentId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -147,6 +152,27 @@ export class DatabaseStorage implements IStorage {
   async createMessages(msgs: InsertMessage[]): Promise<Message[]> {
     if (msgs.length === 0) return [];
     return db.insert(messages).values(msgs).returning();
+  }
+  async getActiveSubscription(querentId: number): Promise<Subscription | undefined> {
+    const now = new Date();
+    const rows = await db.select().from(subscriptions)
+      .where(and(eq(subscriptions.querentId, querentId), eq(subscriptions.status, "active")))
+      .orderBy(desc(subscriptions.endDate));
+    return rows.find((s) => s.endDate > now);
+  }
+
+  async createSubscription(sub: InsertSubscription): Promise<Subscription> {
+    const [created] = await db.insert(subscriptions).values(sub).returning();
+    return created;
+  }
+
+  async cancelSubscription(querentId: number): Promise<void> {
+    await db.update(subscriptions)
+      .set({ status: "cancelled" })
+      .where(and(eq(subscriptions.querentId, querentId), eq(subscriptions.status, "active")));
+    await db.update(querentProfiles)
+      .set({ isSubscription: false })
+      .where(eq(querentProfiles.userId, querentId));
   }
 }
 

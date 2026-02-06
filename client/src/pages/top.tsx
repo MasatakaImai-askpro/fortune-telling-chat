@@ -91,6 +91,7 @@ type QuerentInfo = {
   worry_category: string;
   worry_message: string;
   subscription: boolean;
+  subscription_end_date: string | null;
   point: number;
 };
 
@@ -605,10 +606,16 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   const [localInfo, setLocalInfo] = useState<QuerentInfo | null>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  const [subMsg, setSubMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (queInfoFromQuery && !localInfo) setLocalInfo(queInfoFromQuery);
   }, [queInfoFromQuery]);
+
+  useEffect(() => {
+    if (queInfoFromQuery) setLocalInfo(queInfoFromQuery);
+  }, [queInfoFromQuery?.subscription, queInfoFromQuery?.subscription_end_date]);
 
   const queInfo = localInfo;
   const setQueInfo = setLocalInfo;
@@ -624,6 +631,28 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
       setSubmitMsg("更新しました");
     } catch (e: any) { setSubmitMsg("更新に失敗しました"); }
     finally { setSubmitting(false); }
+  }
+
+  async function handleSubscribe() {
+    try {
+      setSubLoading(true); setSubMsg(null);
+      await apiRequest("POST", "/api/subscribe", {});
+      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+      setSubMsg("サブスクリプションを開始しました");
+    } catch (e: any) {
+      setSubMsg(e?.message || "契約に失敗しました");
+    } finally { setSubLoading(false); }
+  }
+
+  async function handleCancelSubscription() {
+    try {
+      setSubLoading(true); setSubMsg(null);
+      await apiRequest("POST", "/api/cancel_subscription", {});
+      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+      setSubMsg("サブスクリプションを解約しました");
+    } catch (e: any) {
+      setSubMsg(e?.message || "解約に失敗しました");
+    } finally { setSubLoading(false); }
   }
 
   async function handleSaveKarte() {
@@ -659,34 +688,61 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
 
       {tab === "plan" && (
         <div className="grid grid-cols-1 gap-3">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-            <div className="font-semibold">月額サブスク</div>
-            <div className="text-sm text-white/70">ポイント消費なし。相談し放題。</div>
-            <div className="mt-3 flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="radio" checked={queInfo.subscription === true} readOnly /> このプランにする
-              </label>
+          {subMsg && (
+            <div className={cls("text-xs px-3 py-2 rounded-lg border", subMsg.includes("解約") ? "text-amber-300 bg-amber-500/10 border-amber-500/30" : subMsg.includes("失敗") ? "text-red-300 bg-red-500/10 border-red-500/30" : "text-green-300 bg-green-500/10 border-green-500/30")} data-testid="text-sub-msg">
+              {subMsg}
             </div>
+          )}
+          <div className={cls("border rounded-2xl p-4", queInfo.subscription ? "bg-emerald-500/10 border-emerald-500/30" : "bg-white/5 border-white/10")}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Sparkles className="w-4 h-4 text-fuchsia-400" />
+              <span className="font-semibold">月額サブスクコース</span>
+              {queInfo.subscription && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-500/40">契約中</span>}
+            </div>
+            <div className="mt-2 text-2xl font-bold text-white">20,000<span className="text-sm font-normal text-white/70">円/30日</span></div>
+            <div className="mt-2 text-sm text-white/70">全ての操作が定額内。ポイント消費なしで相談し放題。</div>
+            <ul className="mt-2 space-y-1 text-sm text-white/60">
+              <li className="flex items-center gap-2"><span className="text-emerald-400">&#10003;</span> チャット送信時のポイント消費なし</li>
+              <li className="flex items-center gap-2"><span className="text-emerald-400">&#10003;</span> 全ランクの占い師に定額で相談可能</li>
+              <li className="flex items-center gap-2"><span className="text-emerald-400">&#10003;</span> 30日間の有効期間</li>
+            </ul>
+            {queInfo.subscription && queInfo.subscription_end_date && (
+              <div className="mt-3 text-xs text-white/60 bg-white/5 rounded-lg px-3 py-2" data-testid="text-sub-end-date">
+                有効期限: <b className="text-white/90">{new Date(queInfo.subscription_end_date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</b>
+                <span className="ml-2">
+                  (残り{Math.max(0, Math.ceil((new Date(queInfo.subscription_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}日)
+                </span>
+              </div>
+            )}
             <div className="mt-3">
-              <button className={cls("rounded-xl px-4 py-2 text-sm font-semibold", queInfo.subscription ? "bg-emerald-300 text-gray-900" : "bg-white text-gray-900")} data-testid="button-subscribe">
-                {queInfo.subscription ? "契約中" : "Stripeで契約(テスト)"}
-              </button>
+              {queInfo.subscription ? (
+                <button onClick={handleCancelSubscription} disabled={subLoading} data-testid="button-cancel-subscription"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 disabled:opacity-50 transition-colors">
+                  {subLoading ? "処理中..." : "解約する"}
+                </button>
+              ) : (
+                <button onClick={handleSubscribe} disabled={subLoading} data-testid="button-subscribe"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white hover:from-fuchsia-700 hover:to-purple-700 disabled:opacity-50 transition-colors">
+                  {subLoading ? "処理中..." : "このプランに申し込む（20,000円/30日）"}
+                </button>
+              )}
             </div>
           </div>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+          <div className={cls("border rounded-2xl p-4", !queInfo.subscription ? "bg-white/5 border-white/20" : "bg-white/5 border-white/10")}>
             <div className="font-semibold">ポイント制</div>
             <div className="text-sm text-white/70">1pt={YEN_PER_POINT}円。文字数xランク倍率で消費。</div>
             <div className="mt-3 flex items-center gap-3 flex-wrap">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="radio" checked={!queInfo.subscription} readOnly /> このプランにする
-              </label>
               <span className="text-sm text-white/80">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-1000">1000pt購入(約{yen(1000)})</button>
-              <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-3000">3000pt購入(約{yen(3000)})</button>
-            </div>
-            <div className="mt-3 text-[11px] text-white/60">※ 実運用ではStripe Webhookで残高反映/サブスク状態をサーバーで管理してください。</div>
+            {!queInfo.subscription && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-1000">1000pt購入(約{yen(1000)})</button>
+                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-3000">3000pt購入(約{yen(3000)})</button>
+              </div>
+            )}
+            {queInfo.subscription && (
+              <div className="mt-3 text-xs text-emerald-300/80">サブスク契約中のためポイント消費はありません</div>
+            )}
           </div>
         </div>
       )}
@@ -801,6 +857,7 @@ export default function Top() {
     if (querentInfo) {
       setPoints(querentInfo.point ?? 0);
       setSubscriptionActive(querentInfo.subscription ?? false);
+      if (querentInfo.subscription) setPlan("subscription");
     }
   }, [querentInfo]);
 
