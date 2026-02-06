@@ -2,6 +2,7 @@ import express from "express";
 import session from "express-session";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -192,7 +193,51 @@ wss.on("connection", async (ws, req) => {
   });
 });
 
+async function seedDatabase() {
+  try {
+    const existing = await storage.getUserByEmail("test_querent@example.com");
+    if (existing) return;
+
+    log("Seeding database with test accounts...");
+    const hashedPassword = await bcrypt.hash("Test1234", 10);
+
+    const querentUser = await storage.createUser({ email: "test_querent@example.com", password: hashedPassword, role: "1" });
+    await storage.createQuerentProfile({
+      userId: querentUser.id,
+      name: "テスト太郎",
+      telNumber: "09012345678",
+      postalCode: "1000001",
+      address: "東京都千代田区",
+      birthdate: "1990-01-01",
+      zodiacSign: "山羊座",
+      birthplace: "東京",
+      birthtime: "12:00",
+      worryCategory: "love",
+      worryMessage: "",
+      points: 1000,
+    });
+
+    const fortuneUser = await storage.createUser({ email: "test_fortune@example.com", password: hashedPassword, role: "2" });
+    await storage.createFortunetellerProfile({
+      userId: fortuneUser.id,
+      name: "占い花子",
+      rank: "SILVER",
+      profileImage: "",
+      iconImage: "",
+      headline: "あなたの未来を照らします",
+      intro: "霊視とタロットを得意とする占い師です。恋愛相談を中心に、仕事や人間関係のお悩みにも対応いたします。",
+      isRecommended: false,
+    });
+
+    log("Database seeded successfully.");
+  } catch (e: any) {
+    log(`Seed skipped or failed: ${e.message}`);
+  }
+}
+
 (async () => {
+  await seedDatabase();
+
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
