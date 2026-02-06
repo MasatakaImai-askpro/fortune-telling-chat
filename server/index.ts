@@ -75,11 +75,11 @@ const clients = new Set<ChatClient>();
 
 function broadcastToRoom(roomId: string, data: any) {
   const msg = JSON.stringify(data);
-  for (const client of clients) {
+  Array.from(clients).forEach((client) => {
     if (client.roomId === roomId && client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(msg);
     }
-  }
+  });
 }
 
 wss.on("connection", async (ws, req) => {

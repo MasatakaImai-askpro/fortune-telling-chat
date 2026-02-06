@@ -1,9 +1,24 @@
-import { build as esbuild } from "esbuild";
+import { build as esbuild, type Plugin } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
 
-// server deps to bundle to reduce openat(2) syscalls
-// which helps cold start times
+const importMetaUrlPlugin: Plugin = {
+  name: "import-meta-url-fix",
+  setup(build) {
+    build.onLoad({ filter: /vite\.ts$/ }, async (args) => {
+      let contents = await readFile(args.path, "utf-8");
+      if (contents.includes("import.meta.url")) {
+        contents = contents.replace(
+          /import\.meta\.url/g,
+          `require("url").pathToFileURL(__filename).href`
+        );
+        return { contents, loader: "ts" };
+      }
+      return undefined;
+    });
+  },
+};
+
 const allowlist = [
   "@google/generative-ai",
   "axios",
@@ -58,6 +73,7 @@ async function buildAll() {
     minify: true,
     external: externals,
     logLevel: "info",
+    plugins: [importMetaUrlPlugin],
   });
 }
 
