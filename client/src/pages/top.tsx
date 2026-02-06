@@ -58,6 +58,8 @@ type Advisor = {
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
+  style: string;
+  divination_methods: string[];
   tags: string[];
 };
 
@@ -257,6 +259,12 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
                 {a.is_recommended && <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full">おすすめ</span>}
               </div>
               <p className="text-xs text-fuchsia-300/90 leading-relaxed">{a.headline}</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {a.style && <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-full" data-testid={`badge-style-${a.id}`}>{a.style}</span>}
+                {(a.divination_methods || []).map((m) => (
+                  <span key={m} className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded-full" data-testid={`badge-method-${a.id}-${m}`}>{m}</span>
+                ))}
+              </div>
               <p className="text-xs text-white/60 leading-relaxed line-clamp-2">{a.intro}</p>
             </div>
           </div>
@@ -284,7 +292,15 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
                 </div>
               </div>
               <h4 className="mt-3 font-semibold">{adv(detailId)!.headline}</h4>
-              <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">{truncate(adv(detailId)!.intro || "", 1000)}</p>
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                {adv(detailId)!.style && (
+                  <span className="text-[11px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full" data-testid="badge-detail-style">{adv(detailId)!.style}</span>
+                )}
+                {(adv(detailId)!.divination_methods || []).map((m) => (
+                  <span key={m} className="text-[11px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full" data-testid={`badge-detail-method-${m}`}>{m}</span>
+                ))}
+              </div>
+              <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{truncate(adv(detailId)!.intro || "", 1000)}</p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" data-testid="button-start-chat-detail"
                   onClick={() => { onStartChat(detailId); setDetailId(null); }}>この占い師に相談</button>

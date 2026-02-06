@@ -265,9 +265,12 @@ async function seedDatabase() {
     ];
 
     const ranks = ["SILVER", "GOLD", "PLATINUM"];
+    const styles = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
+    const methods = ["手相", "タロット", "四柱推命", "占星術", "九星気学"];
     for (let i = 0; i < 30; i++) {
       const idx = String(i + 1).padStart(2, "0");
       const ft = ftNames[i];
+      const ftMethods = [methods[i % 5], methods[(i + 2) % 5]].filter((v, j, a) => a.indexOf(v) === j);
       const user = await storage.createUser({ email: `fortune${idx}@example.com`, password: hashedPassword, role: "2" });
       await storage.createFortunetellerProfile({
         userId: user.id,
@@ -278,6 +281,8 @@ async function seedDatabase() {
         headline: ft.headline,
         intro: ft.intro,
         isRecommended: i < 5,
+        style: styles[i % 6],
+        divinationMethods: ftMethods,
       });
     }
 

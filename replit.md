@@ -39,7 +39,7 @@ client/
 
 ## Database Tables
 - `users` - email, password (bcrypt), role ("1"=querent, "2"=fortuneteller)
-- `fortuneteller_profiles` - name, headline, intro, rank, images, is_recommended
+- `fortuneteller_profiles` - name, headline, intro, rank, images, is_recommended, style, divination_methods
 - `querent_profiles` - name, contact info, birthdate, zodiac, worry details, points
 - `bank_info` - bank account details for fortunetellers
 - `rooms` - chat rooms (fortuneteller_id + querent_id unique pair)
@@ -109,3 +109,4 @@ client/
 - 2026-02-06: Refactored data fetching to use TanStack Query with proper cache invalidation
 - 2026-02-06: Added 30 fortuneteller + 30 querent test data seed, bulk message API, querent list tab in advisor dashboard
 - 2026-02-06: Added subscription system (20,000 yen/30 days) with subscribe/cancel APIs, subscription tracking in DB, point-free chat when subscribed
+- 2026-02-06: Added fortuneteller profile fields: style (6 options) and divination_methods (5 options, multi-select). Displayed on advisor listing cards and detail modal. Editable in fortuneteller profile settings.

@@ -125,6 +125,8 @@ export function registerRoutes(app: Express) {
         headline: p.headline,
         intro: p.intro,
         is_recommended: p.isRecommended,
+        style: p.style,
+        divination_methods: p.divinationMethods,
       }));
       res.json(list);
     } catch (e: any) {
@@ -147,6 +149,8 @@ export function registerRoutes(app: Express) {
         profile_image: profile.profileImage,
         icon_image: profile.iconImage,
         is_recommended: profile.isRecommended,
+        style: profile.style,
+        divination_methods: profile.divinationMethods,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -155,8 +159,14 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/my_fortuneteller_profile", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { name, headline, intro } = req.body;
-      const updated = await storage.updateFortunetellerProfile(req.session.userId!, { name, headline, intro });
+      const { name, headline, intro, style, divination_methods } = req.body;
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (headline !== undefined) updateData.headline = headline;
+      if (intro !== undefined) updateData.intro = intro;
+      if (style !== undefined) updateData.style = style;
+      if (divination_methods !== undefined) updateData.divinationMethods = divination_methods;
+      const updated = await storage.updateFortunetellerProfile(req.session.userId!, updateData);
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });
     } catch (e: any) {
@@ -402,6 +412,8 @@ export function registerRoutes(app: Express) {
         headline: p.headline,
         intro: p.intro,
         is_recommended: p.isRecommended,
+        style: p.style,
+        divination_methods: p.divinationMethods,
         tags: [p.headline].filter(Boolean),
       }));
       res.json(list);

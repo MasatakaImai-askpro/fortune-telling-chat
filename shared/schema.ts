@@ -19,6 +19,8 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
   profileImage: text("profile_image").notNull().default(""),
   iconImage: text("icon_image").notNull().default(""),
   isRecommended: boolean("is_recommended").notNull().default(false),
+  style: varchar("style", { length: 20 }).notNull().default(""),
+  divinationMethods: text("divination_methods").array().notNull().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -31,6 +31,8 @@ type Profile = {
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
+  style: string;
+  divination_methods: string[];
 };
 
 type BankInfo = {
@@ -206,6 +208,9 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
   );
 }
 
+const STYLE_OPTIONS = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
+const METHOD_OPTIONS = ["手相", "タロット", "四柱推命", "占星術", "九星気学"];
+
 function ProfileSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -215,6 +220,8 @@ function ProfileSettings() {
   const [name, setName] = useState("");
   const [headline, setHeadline] = useState("");
   const [intro, setIntro] = useState("");
+  const [style, setStyle] = useState("");
+  const [divinationMethods, setDivinationMethods] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -223,13 +230,21 @@ function ProfileSettings() {
       setName(profile.name);
       setHeadline(profile.headline);
       setIntro(profile.intro);
+      setStyle(profile.style || "");
+      setDivinationMethods(profile.divination_methods || []);
     }
   }, [profile]);
+
+  function toggleMethod(m: string) {
+    setDivinationMethods((prev) =>
+      prev.includes(m) ? prev.filter((v) => v !== m) : [...prev, m]
+    );
+  }
 
   async function save() {
     try {
       setSaving(true);
-      await apiRequest("PATCH", "/api/my_fortuneteller_profile", { name, headline, intro });
+      await apiRequest("PATCH", "/api/my_fortuneteller_profile", { name, headline, intro, style, divination_methods: divinationMethods });
       queryClient.invalidateQueries({ queryKey: ["/api/my_fortuneteller_profile"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -258,6 +273,46 @@ function ProfileSettings() {
         <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={5} data-testid="textarea-profile-intro"
           className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-none" />
       </label>
+      <div className="space-y-1.5">
+        <span className="text-white/60 text-xs">スタイル</span>
+        <div className="flex flex-wrap gap-2">
+          {STYLE_OPTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStyle(s)}
+              data-testid={`button-style-${s}`}
+              className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
+                style === s
+                  ? "bg-purple-600 border-purple-500 text-white"
+                  : "bg-white/5 border-white/15 text-white/60 hover:text-white/80"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <span className="text-white/60 text-xs">占術（複数選択可）</span>
+        <div className="flex flex-wrap gap-2">
+          {METHOD_OPTIONS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => toggleMethod(m)}
+              data-testid={`button-method-${m}`}
+              className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
+                divinationMethods.includes(m)
+                  ? "bg-cyan-600 border-cyan-500 text-white"
+                  : "bg-white/5 border-white/15 text-white/60 hover:text-white/80"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
       <button onClick={save} disabled={saving} data-testid="button-save-profile"
         className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50">
         {saving ? "保存中..." : saved ? "保存しました" : "保存する"}
