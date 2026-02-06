@@ -198,7 +198,7 @@ wss.on("connection", async (ws, req) => {
     serveStatic(app);
   }
 
-  const port = 5000;
+  const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
