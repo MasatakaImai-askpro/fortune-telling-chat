@@ -256,7 +256,7 @@ function ProfileSettings() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+    <div className="p-4 space-y-4 pb-8">
       <div className="text-sm font-bold text-white/80" data-testid="text-settings-title">プロフィール設定</div>
       <label className="block text-sm">
         <span className="text-white/60">占い師名</span>
@@ -535,7 +535,7 @@ function BankSettings() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+    <div className="p-4 space-y-4 pb-8">
       <div className="text-sm font-bold text-white/80" data-testid="text-bank-title">振込先口座設定</div>
       {[
         { label: "銀行名", key: "name" as const },
@@ -614,7 +614,7 @@ export default function AdvisorApp() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden flex flex-col">
         {tab === "chat" && selectedRoom ? (
           <ChatView room={selectedRoom} onBack={() => setSelectedRoom(null)} />
         ) : tab === "chat" ? (
@@ -622,9 +622,9 @@ export default function AdvisorApp() {
         ) : tab === "querents" ? (
           <QuerentListView />
         ) : tab === "profile" ? (
-          <ProfileSettings />
+          <div className="flex-1 overflow-y-auto"><ProfileSettings /></div>
         ) : (
-          <BankSettings />
+          <div className="flex-1 overflow-y-auto"><BankSettings /></div>
         )}
       </div>
 

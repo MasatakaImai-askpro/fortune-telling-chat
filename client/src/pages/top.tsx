@@ -214,10 +214,10 @@ function RankedCarousel({ title, advisors, onStartChat, onFav, favorites, limit 
       {limited.length === 0 ? (
         <div className="text-xs text-white/50 py-4 text-center">{emptyText || "該当なし"}</div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex gap-3 overflow-x-auto pb-2 pt-1 pl-1 no-scrollbar">
           {limited.map((a, idx) => (
             <div key={a.id} className="relative">
-              {showRankBadge && <div className="absolute -top-1 -left-1 z-10 text-[10px] bg-amber-500 text-gray-900 font-bold w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</div>}
+              {showRankBadge && <div className="absolute -top-1 -left-1 z-50 text-[10px] bg-amber-500 text-gray-900 font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{idx + 1}</div>}
               <AdvisorMiniCard advisor={a} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
             </div>
           ))}
