@@ -242,4 +242,114 @@ export function registerRoutes(app: Express) {
       res.status(500).json({ error: e.message });
     }
   });
+
+  app.get("/api/get_querent_info", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const profile = await storage.getQuerentProfile(user.id);
+      if (!profile) return res.status(404).json({ error: "プロフィールが見つかりません" });
+      res.json({
+        name: profile.name,
+        email: user.email,
+        tel_number: profile.telNumber,
+        postal_code: profile.postalCode,
+        address: profile.address,
+        birthdate: profile.birthdate,
+        zodiac_sign: profile.zodiacSign,
+        birthplace: profile.birthplace,
+        birthtime: profile.birthtime,
+        worry_category: profile.worryCategory,
+        worry_message: profile.worryMessage,
+        subscription: profile.isSubscription,
+        point: profile.points,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const karteSchema = z.object({
+    birthdate: z.string().optional().default(""),
+    zodiac_sign: z.string().optional().default(""),
+    birthplace: z.string().optional().default(""),
+    birthtime: z.string().optional().default(""),
+    worry_category: z.string().optional().default(""),
+    worry_message: z.string().max(1000).optional().default(""),
+  });
+
+  app.post("/api/edit_querent_karte", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const parsed = karteSchema.parse(req.body);
+      const updated = await storage.updateQuerentProfile(user.id, {
+        birthdate: parsed.birthdate, zodiacSign: parsed.zodiac_sign,
+        birthplace: parsed.birthplace, birthtime: parsed.birthtime,
+        worryCategory: parsed.worry_category, worryMessage: parsed.worry_message,
+      });
+      if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
+      res.json({ message: "更新しました" });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const infoSchema = z.object({
+    name: z.string().max(20).optional(),
+    tel_number: z.string().max(11).optional(),
+    postal_code: z.string().max(7).optional(),
+    address: z.string().max(255).optional(),
+  });
+
+  app.post("/api/edit_querent_info", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const parsed = infoSchema.parse(req.body);
+      const updated = await storage.updateQuerentProfile(user.id, {
+        name: parsed.name, telNumber: parsed.tel_number,
+        postalCode: parsed.postal_code, address: parsed.address,
+      });
+      if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
+      res.json({ message: "更新しました" });
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/get_room", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const fortunetellerId = parseInt(req.query.fortuneteller as string, 10);
+      if (isNaN(fortunetellerId)) return res.status(400).json({ error: "fortuneteller is required" });
+      const room = await storage.getRoomByPair(fortunetellerId, req.session.userId!);
+      if (!room) return res.json(null);
+      res.json({ id: room.id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/get_fortuneteller_all", async (_req: Request, res: Response) => {
+    try {
+      const profiles = await storage.getAllFortunetellerProfiles();
+      const list = profiles.map((p) => ({
+        id: p.userId,
+        user_id: p.userId,
+        name: p.name,
+        rank: p.rank,
+        profile_image: p.profileImage,
+        icon_image: p.iconImage,
+        headline: p.headline,
+        intro: p.intro,
+        is_recommended: p.isRecommended,
+        tags: [p.headline].filter(Boolean),
+      }));
+      res.json(list);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 }

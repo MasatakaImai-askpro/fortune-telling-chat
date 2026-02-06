@@ -1,11 +1,55 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
-import { Search, Star, Send, X, MessageCircle, LogOut, User, ChevronLeft, Sparkles } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { Search, Send, ChevronLeft, Sparkles, LogOut, Home as HomeIcon, Users, MessageCircle, Settings, Star, Paperclip, X } from "lucide-react";
+
+const API_BASE = "";
+const YEN_PER_POINT = 1.5;
+
+const RANK_TABLE: Record<string, { key: string; jp: string; mult: number; color: string }> = {
+  PLATINUM: { key: "PLATINUM", jp: "プラチナ", mult: 3, color: "from-slate-200 to-zinc-500" },
+  GOLD: { key: "GOLD", jp: "ゴールド", mult: 2, color: "from-amber-200 to-orange-500" },
+  SILVER: { key: "SILVER", jp: "シルバー", mult: 1, color: "from-neutral-200 to-gray-400" },
+};
+const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.SILVER;
+
+const SAMPLE_GENRES = ["恋愛", "仕事", "人間関係", "金運", "健康"];
+
+const FREE_TEMPLATES = [
+  "はじめまして。最近悩んでいることがあり、ご相談させてください。",
+  "恋愛について占っていただきたいです。",
+  "仕事の転機が来ている気がします。アドバイスをお願いします。",
+];
+
+const cls = (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(" ");
+const fmtPts = (n: number) => `${n.toLocaleString()}pt`;
+const yen = (pts: number) => `${Math.round(pts * YEN_PER_POINT).toLocaleString()}円`;
+const truncate = (s: string, n: number) => (s && s.length > n ? s.slice(0, n) + "…" : s || "");
+const timefmt = (iso: string) => {
+  try { return new Date(iso).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }); }
+  catch { return ""; }
+};
+
+const genreColor = (g: string) => {
+  const map: Record<string, { on: string; off: string }> = {
+    "恋愛": { on: "bg-pink-500/30 border-pink-400/60 text-pink-200", off: "bg-white/5 border-white/15 text-white/60" },
+    "仕事": { on: "bg-blue-500/30 border-blue-400/60 text-blue-200", off: "bg-white/5 border-white/15 text-white/60" },
+    "人間関係": { on: "bg-green-500/30 border-green-400/60 text-green-200", off: "bg-white/5 border-white/15 text-white/60" },
+    "金運": { on: "bg-amber-500/30 border-amber-400/60 text-amber-200", off: "bg-white/5 border-white/15 text-white/60" },
+    "健康": { on: "bg-teal-500/30 border-teal-400/60 text-teal-200", off: "bg-white/5 border-white/15 text-white/60" },
+  };
+  return map[g] || map["恋愛"];
+};
+
+const storage = {
+  load: <T,>(key: string, fallback: T): T => { try { const v = localStorage.getItem("ftapp_" + key); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  save: (key: string, value: any) => { try { localStorage.setItem("ftapp_" + key, JSON.stringify(value)); } catch {} },
+};
 
 type Advisor = {
+  id: number;
   user_id: number;
   name: string;
   headline: string;
@@ -14,213 +58,724 @@ type Advisor = {
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
+  tags: string[];
 };
 
-type Message = {
-  id: string;
-  sender: string;
+type ChatMessage = {
+  id: number | string;
+  sender: "querent" | "fortuneteller";
   text: string;
   created_at: string;
-  free: boolean;
-  attachments: any[];
+  attachments?: any[];
+  free?: boolean;
 };
 
-const RANK_COLORS: Record<string, string> = {
-  PLATINUM: "bg-gradient-to-r from-cyan-400 to-blue-400 text-white",
-  GOLD: "bg-gradient-to-r from-yellow-400 to-amber-400 text-gray-900",
-  SILVER: "bg-gradient-to-r from-gray-300 to-gray-400 text-gray-900",
+type Thread = {
+  roomId: string | null;
+  advisorId: number;
+  messages: ChatMessage[];
 };
 
-function RankBadge({ rank }: { rank: string }) {
+type ThreadsMap = Record<number, Thread>;
+
+type QuerentInfo = {
+  name: string;
+  email: string;
+  tel_number: string;
+  postal_code: string;
+  address: string;
+  birthdate: string;
+  zodiac_sign: string;
+  birthplace: string;
+  birthtime: string;
+  worry_category: string;
+  worry_message: string;
+  subscription: boolean;
+  point: number;
+};
+
+function Ribbon({ rank }: { rank: string }) {
+  const info = getRankInfo(rank);
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${RANK_COLORS[rank] ?? "bg-gray-600 text-white"}`}
+    <span className={cls("text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r", info.color, "text-gray-900")}
       data-testid={`badge-rank-${rank}`}>
-      {rank}
+      {info.jp}
     </span>
   );
 }
 
-function AdvisorCard({ advisor, onSelect }: { advisor: Advisor; onSelect: (a: Advisor) => void }) {
+function IconBtn({ onClick, children, className }: { onClick: () => void; children: React.ReactNode; className?: string }) {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3 hover:bg-white/8 transition-colors cursor-pointer"
-      onClick={() => onSelect(advisor)} data-testid={`card-advisor-${advisor.user_id}`}>
-      <div className="flex items-start gap-3">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-lg font-bold flex-shrink-0"
-          data-testid={`avatar-advisor-${advisor.user_id}`}>
-          {advisor.icon_image ? (
-            <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover" />
-          ) : (
-            advisor.name.charAt(0)
+    <button onClick={onClick} className={cls("w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-sm font-semibold", className)}>
+      {children}
+    </button>
+  );
+}
+
+function Input({ label, value, onChange, type = "text", placeholder = "" }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-white/70 text-xs">{label}</span>
+      <input type={type} value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+    </label>
+  );
+}
+
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-white/70 text-xs">{label}</span>
+      <select value={value || ""} onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 focus:outline-none">
+        {options.map((o) => <option key={o} value={o} className="bg-gray-800">{o}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function Textarea({ label, value, onChange, hint }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-white/70 text-xs">{label}</span>
+      <textarea value={value || ""} onChange={(e) => onChange(e.target.value)} rows={4}
+        className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-none" />
+      {hint && <div className="text-right text-[10px] text-white/50">{hint}</div>}
+    </label>
+  );
+}
+
+function Header({ user, loading, point, subscriptionActive, onGoPlan, onLogout }: { user: any; loading: boolean; point?: number; subscriptionActive?: boolean; onGoPlan: () => void; onLogout: () => void }) {
+  return (
+    <header className="sticky top-0 z-30 bg-[#0d1a33]/90 backdrop-blur border-b border-white/10">
+      <div className="max-w-2xl mx-auto px-4 py-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-lg font-bold tracking-wide" data-testid="text-app-title">
+            <Sparkles className="w-5 h-5 inline-block mr-1 text-fuchsia-400" />
+            占いチャット
+          </div>
+          {!loading && user && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {subscriptionActive ? (
+                <span className="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-full" data-testid="badge-subscription">月額プラン</span>
+              ) : (
+                <button onClick={onGoPlan} className="text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-full" data-testid="badge-points">
+                  {fmtPts(point ?? 0)}
+                </button>
+              )}
+              <span className="text-xs text-white/50 hidden sm:inline" data-testid="text-user-email">{user.email}</span>
+              <button onClick={onLogout} className="text-xs text-white/50 hover:text-white" data-testid="button-logout">
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-sm truncate" data-testid={`text-advisor-name-${advisor.user_id}`}>{advisor.name}</span>
-            <RankBadge rank={advisor.rank} />
-            {advisor.is_recommended && (
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full" data-testid={`badge-recommended-${advisor.user_id}`}>
-                おすすめ
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-fuchsia-300/90 leading-relaxed" data-testid={`text-headline-${advisor.user_id}`}>{advisor.headline}</p>
-          <p className="text-xs text-white/60 leading-relaxed line-clamp-2">{advisor.intro}</p>
+      </div>
+    </header>
+  );
+}
+
+function AdvisorMiniCard({ advisor, onStartChat, onFav, favorites }: { advisor: Advisor; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[] }) {
+  return (
+    <div className="min-w-[160px] max-w-[180px] bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2 flex-shrink-0">
+      <div className="flex items-center gap-2">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0"
+          data-testid={`avatar-mini-${advisor.id}`}>
+          {advisor.icon_image ? <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover" /> : advisor.name.charAt(0)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold truncate">{advisor.name}</div>
+          <Ribbon rank={advisor.rank} />
         </div>
       </div>
-      <div className="flex justify-end">
-        <button className="flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 transition-colors"
-          data-testid={`button-chat-${advisor.user_id}`}>
-          <MessageCircle className="w-3.5 h-3.5" />
-          <span>チャットする</span>
+      <p className="text-[10px] text-white/60 line-clamp-2">{advisor.headline}</p>
+      <div className="grid grid-cols-2 gap-1">
+        <button className={cls("rounded-lg py-1 text-[10px] font-semibold border border-white/20", favorites.includes(advisor.id) ? "bg-pink-500/20 text-pink-100" : "text-white/80")}
+          onClick={() => onFav(advisor.id)} data-testid={`button-fav-mini-${advisor.id}`}>
+          {favorites.includes(advisor.id) ? <><Star className="w-3 h-3 inline fill-pink-400 text-pink-400" /> 済</> : <><Star className="w-3 h-3 inline" /> +</>}
         </button>
+        <button className="rounded-lg py-1 text-[10px] font-semibold bg-white/10 border border-white/20"
+          onClick={() => onStartChat(advisor.id)} data-testid={`button-chat-mini-${advisor.id}`}>相談</button>
       </div>
     </div>
   );
 }
 
-function ChatPanel({ advisor, onClose }: { advisor: Advisor; onClose: () => void }) {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+function RankedCarousel({ title, advisors, onStartChat, onFav, favorites, limit = 10, showRankBadge = true, emptyText = "" }: {
+  title: string; advisors: Advisor[]; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[]; limit?: number; showRankBadge?: boolean; emptyText?: string;
+}) {
+  const limited = advisors.slice(0, limit);
+  return (
+    <div className="space-y-2">
+      <h3 className="font-semibold text-white/90 text-sm">{title}</h3>
+      {limited.length === 0 ? (
+        <div className="text-xs text-white/50 py-4 text-center">{emptyText || "該当なし"}</div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+          {limited.map((a, idx) => (
+            <div key={a.id} className="relative">
+              {showRankBadge && <div className="absolute -top-1 -left-1 z-10 text-[10px] bg-amber-500 text-gray-900 font-bold w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</div>}
+              <AdvisorMiniCard advisor={a} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeaturedAdvisors({ advisors, onStartChat, onFav, favorites }: { advisors: Advisor[]; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[] }) {
+  const featured = useMemo(() => advisors.filter((a) => a.is_recommended).slice(0, 5), [advisors]);
+  if (featured.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h3 className="font-semibold text-white/90 text-sm flex items-center gap-1"><Sparkles className="w-4 h-4 text-fuchsia-400" /> おすすめの占い師</h3>
+      <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+        {featured.map((a) => <AdvisorMiniCard key={a.id} advisor={a} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />)}
+      </div>
+    </div>
+  );
+}
+
+function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: { advisors: Advisor[]; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[]; emptyText?: string }) {
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const adv = (id: number) => advisors.find((a) => a.id === id);
+  if (advisors.length === 0) return <div className="text-center text-white/50 text-sm py-8">{emptyText || "該当する占い師が見つかりませんでした"}</div>;
+  return (
+    <div className="space-y-3">
+      {advisors.map((a) => (
+        <div key={a.id} className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3" data-testid={`card-advisor-${a.id}`}>
+          <div className="flex items-start gap-3">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-lg font-bold flex-shrink-0">
+              {a.icon_image ? <img src={a.icon_image} alt="" className="w-full h-full rounded-full object-cover" /> : a.name.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-sm truncate" data-testid={`text-advisor-name-${a.id}`}>{a.name}</span>
+                <Ribbon rank={a.rank} />
+                {a.is_recommended && <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-full">おすすめ</span>}
+              </div>
+              <p className="text-xs text-fuchsia-300/90 leading-relaxed">{a.headline}</p>
+              <p className="text-xs text-white/60 leading-relaxed line-clamp-2">{a.intro}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button className={cls("rounded-xl py-2 text-xs font-semibold border border-white/20", favorites.includes(a.id) ? "bg-pink-500/20 text-pink-100" : "text-white/80")}
+              onClick={() => onFav(a.id)} data-testid={`button-fav-${a.id}`}>
+              {favorites.includes(a.id) ? <><Star className="w-3 h-3 inline fill-pink-400 text-pink-400" /> お気に入り</> : <><Star className="w-3 h-3 inline" /> お気に入り</>}
+            </button>
+            <button className="rounded-xl py-2 text-xs font-semibold bg-white/10 border border-white/20"
+              onClick={() => setDetailId(a.id)} data-testid={`button-detail-${a.id}`}>詳細を見る</button>
+          </div>
+        </div>
+      ))}
+      {detailId && adv(detailId) && (
+        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={() => setDetailId(null)}>
+          <div className="w-full max-w-md bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {adv(detailId)!.profile_image && <img src={adv(detailId)!.profile_image} className="w-full h-32 object-cover" alt="" />}
+            <div className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center font-bold flex-shrink-0">
+                  {adv(detailId)!.icon_image ? <img src={adv(detailId)!.icon_image} alt="" className="w-full h-full rounded-full object-cover ring-2 ring-white/20" /> : adv(detailId)!.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold truncate flex items-center gap-2">{adv(detailId)!.name} <Ribbon rank={adv(detailId)!.rank} /></div>
+                </div>
+              </div>
+              <h4 className="mt-3 font-semibold">{adv(detailId)!.headline}</h4>
+              <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">{truncate(adv(detailId)!.intro || "", 1000)}</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" data-testid="button-start-chat-detail"
+                  onClick={() => { onStartChat(detailId); setDetailId(null); }}>この占い師に相談</button>
+                <button className="rounded-xl py-2 text-xs font-semibold bg-white/10 border border-white/20" onClick={() => setDetailId(null)}>閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Advisors({ advisorsFromTop, favorites, onFav, onStartChat }: { advisorsFromTop: Advisor[]; favorites: number[]; onFav: (id: number) => void; onStartChat: (id: number) => void }) {
+  const [q, setQ] = useState("");
+  const lowerQ = q.toLowerCase();
+  const filtered = advisorsFromTop.filter((a) => a.name.toLowerCase().includes(lowerQ) || (a.tags || []).join(" ").toLowerCase().includes(lowerQ) || a.headline.toLowerCase().includes(lowerQ));
+  return (
+    <section className="space-y-3">
+      <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-[#0d1a33]/80 backdrop-blur">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前・ジャンルで検索" data-testid="input-search-advisors"
+            className="w-full rounded-2xl bg-white/10 border border-white/20 pl-9 pr-3 py-3 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+        </div>
+      </div>
+      <CardList advisors={filtered} onStartChat={onStartChat} onFav={onFav} favorites={favorites} emptyText="該当する占い師が見つかりませんでした" />
+    </section>
+  );
+}
+
+function ConfirmModal({ cost, onConfirm, onCancel, querentInfo }: { cost: number; onConfirm: () => void; onCancel: () => void; querentInfo: QuerentInfo | null }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={onCancel}>
+      <div className="w-full max-w-sm bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden p-5 space-y-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h4 className="text-lg font-semibold text-pink-300" data-testid="text-confirm-title">ポイント消費の確認</h4>
+        <p className="text-white/90 leading-relaxed">
+          このメッセージを送信すると、<b className="text-lg text-pink-200">{fmtPts(cost)}</b>（約{yen(cost)}）を消費します。
+        </p>
+        <p className="text-sm text-white/70">残ポイント: <b>{fmtPts(querentInfo?.point ?? 0)}</b></p>
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <button className="rounded-xl py-2 text-sm font-semibold bg-white/10 border border-white/20 text-white/80" onClick={onCancel} data-testid="button-cancel-confirm">キャンセル</button>
+          <button className="rounded-xl py-2 text-sm font-semibold bg-pink-500 text-gray-900" onClick={onConfirm} data-testid="button-confirm-send">送信して消費する</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, setThreads, onBack, querentInfo }: {
+  plan: string; points: number; setPoints: (fn: (p: number) => number) => void; subscriptionActive: boolean; advisor: Advisor | null;
+  thread?: Thread; setThreads: React.Dispatch<React.SetStateAction<ThreadsMap>>; onBack: () => void; querentInfo: QuerentInfo | null;
+}) {
+  const [text, setText] = useState("");
+  const [uploads, setUploads] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [costToConfirm, setCostToConfirm] = useState<number | null>(null);
+  const [roomLoading, setRoomLoading] = useState(true);
+  const [room, setRoom] = useState<{ id: string } | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messages = thread?.messages ?? [];
 
   const scrollBottom = useCallback(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/ws?fortuneteller_id=${advisor.user_id}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onmessage = (ev) => {
+    if (!advisor) return;
+    const fetchRoom = async () => {
       try {
-        const data = JSON.parse(ev.data);
-        if (data.type === "history" && data.messages) {
-          setMessages(data.messages);
-          setTimeout(scrollBottom, 50);
-        } else if (data.type === "new_message" && data.message) {
-          setMessages((prev) => [...prev, data.message]);
-          setTimeout(scrollBottom, 50);
-        } else if (data.type === "room_init") {
-          // room assigned
-        }
-      } catch {}
+        const res = await fetch(`${API_BASE}/api/get_room?fortuneteller=${advisor.id}`, { credentials: "include" });
+        if (!res.ok) throw new Error("failed");
+        const data = await res.json();
+        if (data) { setRoom({ id: data.id }); } else { setRoom(null); }
+      } catch (e) { console.error(e); setRoom(null); }
+      finally { setRoomLoading(false); }
     };
+    fetchRoom();
+  }, [advisor?.id]);
 
-    return () => { ws.close(); };
-  }, [advisor.user_id, user, scrollBottom]);
+  useEffect(() => {
+    if (roomLoading || !advisor) return;
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = room
+      ? `${proto}//${location.host}/ws?room_id=${room.id}`
+      : `${proto}//${location.host}/ws?fortuneteller_id=${advisor.id}`;
+    const sock = new WebSocket(wsUrl);
+    socketRef.current = sock;
 
-  function sendMessage() {
-    if (!input.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({
-      type: "chat_message",
-      sender: "querent",
-      text: input.trim(),
-      category: "free",
-    }));
-    setInput("");
-  }
+    sock.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "history") {
+        setThreads((prev) => ({
+          ...prev,
+          [advisor.id]: { advisorId: advisor.id, roomId: data.room_id || room?.id || null, messages: data.messages || [] },
+        }));
+        setTimeout(scrollBottom, 50);
+        return;
+      }
+      if (data.type === "new_message") {
+        setThreads((prev) => {
+          const t = prev[advisor.id] ?? { advisorId: advisor.id, roomId: data.room_id || null, messages: [] };
+          return { ...prev, [advisor.id]: { ...t, roomId: data.room_id ?? t.roomId, messages: [...(t.messages ?? []), data.message] } };
+        });
+        setTimeout(scrollBottom, 50);
+      }
+      if (data.type === "room_init") {
+        setRoom({ id: data.room_id });
+      }
+    };
+    return () => { sock.close(); };
+  }, [roomLoading, advisor?.id, room?.id, setThreads, scrollBottom]);
+
+  useEffect(() => { setTimeout(scrollBottom, 100); }, [messages.length, scrollBottom]);
+
+  if (!advisor) return <section className="py-12 text-center text-white/70">まず占い師を選んでください（ホームまたは「占い師」から）。</section>;
+
+  const executeSend = (cost: number) => {
+    if (!(plan === "subscription" && subscriptionActive)) setPoints((p) => p - cost);
+    const payload: any = { type: "chat_message", sender: "querent", text: text.trim(), attachments: uploads };
+    if (!room) payload.advisor_id = advisor.id;
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(payload));
+    } else { console.warn("WebSocket not open"); }
+    setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false);
+  };
+
+  const onSend = ({ isFreeTemplate = false } = {}) => {
+    const trimmed = text.trim();
+    if (trimmed === "" && uploads.length === 0) return;
+    const rankInfo = getRankInfo(advisor.rank);
+    const cost = isFreeTemplate ? 0 : trimmed.length * rankInfo.mult;
+    if (plan === "subscription" && subscriptionActive) { executeSend(0); return; }
+    if (points < cost) { alert(`ポイントが不足しています。必要: ${cost}pt。ポイントを購入してください。`); return; }
+    if (isFreeTemplate) { executeSend(0); return; }
+    setCostToConfirm(cost);
+  };
+
+  const onConfirmSend = () => { if (costToConfirm !== null) executeSend(costToConfirm); };
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files; if (!files || !files.length) return;
+    const newUploads = Array.from(files).map((f) => {
+      const url = URL.createObjectURL(f);
+      let type = "file"; if (f.type.startsWith("image/")) type = "image"; else if (f.type.startsWith("video/")) type = "video";
+      return { type, url, name: f.name };
+    });
+    setUploads(newUploads); e.target.value = "";
+  };
+  const removeUpload = (i: number) => setUploads((prev) => prev.filter((_, idx) => idx !== i));
+  const applyTemplate = (t: string) => { setText(t); setShowTemplates(false); };
+
+  if (roomLoading) return <div className="text-white/60 p-4">読み込み中...</div>;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0c1a33]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#0d1a33]">
-        <button onClick={onClose} className="text-white/70 hover:text-white" data-testid="button-close-chat">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-          {advisor.icon_image ? (
-            <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover" />
-          ) : (
-            advisor.name.charAt(0)
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold truncate" data-testid="text-chat-advisor-name">{advisor.name}</div>
-          <div className="text-[10px] text-white/50">{connected ? "接続中" : "接続中..."}</div>
-        </div>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar" data-testid="container-messages">
-        {messages.length === 0 && (
-          <div className="text-center text-white/40 text-sm pt-12" data-testid="text-no-messages">
-            <Sparkles className="w-8 h-8 mx-auto mb-3 text-fuchsia-400/50" />
-            <p>まだメッセージはありません</p>
-            <p className="text-xs mt-1">最初のメッセージを送ってみましょう</p>
+    <section className="pb-28">
+      {costToConfirm !== null && <ConfirmModal cost={costToConfirm} onConfirm={onConfirmSend} onCancel={() => setCostToConfirm(null)} querentInfo={querentInfo} />}
+      <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-0 bg-[#0d1a33]/80 backdrop-blur border-b border-white/10">
+        <div className="flex items-center gap-3 py-1">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {advisor.icon_image ? <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover ring-2 ring-white/20" /> : advisor.name.charAt(0)}
           </div>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.sender === "querent" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-              m.sender === "querent"
-                ? "bg-fuchsia-700/80 text-white rounded-br-md"
-                : "bg-white/10 text-white/90 rounded-bl-md"
-            }`} data-testid={`message-${m.id}`}>
-              {m.text}
-              <div className="text-[10px] text-white/40 mt-1 text-right">
-                {new Date(m.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
-              </div>
+          <div className="min-w-0">
+            <div className="font-semibold leading-tight truncate" data-testid="text-chat-advisor-name">{advisor.name}</div>
+            <div className="text-[11px] text-white/70 flex items-center gap-2 flex-wrap">
+              <Ribbon rank={advisor.rank} />
+              {plan === "subscription" && subscriptionActive ? (
+                <span className="text-emerald-300">月額内で使い放題</span>
+              ) : (
+                <span>1文字={getRankInfo(advisor.rank).mult}pt / 1pt={YEN_PER_POINT}円</span>
+              )}
             </div>
           </div>
-        ))}
+          <button className="ml-auto text-xs font-semibold rounded-xl px-3 py-1 bg-white/10 border border-white/20" onClick={onBack} data-testid="button-back-to-list">一覧へ</button>
+        </div>
+        <div className="mt-2 mb-2 border-t border-white/10 pt-2">
+          <div className="rounded-2xl overflow-hidden border border-white/10">
+            {advisor.profile_image && <img src={advisor.profile_image} className="w-full h-28 object-cover" alt="" />}
+            <div className="p-3">
+              <div className="text-sm font-semibold">{advisor.headline}</div>
+              <p className="text-xs text-white/80 mt-1 whitespace-pre-wrap">{truncate(advisor.intro, 150)}</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="p-3 border-t border-white/10 bg-[#0d1a33]">
-        <div className="flex items-center gap-2">
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} data-testid="input-chat-message"
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-            placeholder="メッセージを入力..."
-            className="flex-1 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
-          <button onClick={sendMessage} data-testid="button-send-message"
-            className="w-9 h-9 rounded-full bg-fuchsia-600 hover:bg-fuchsia-700 flex items-center justify-center transition-colors">
-            <Send className="w-4 h-4 text-white" />
+      <div ref={scrollRef} className="mt-3 space-y-3 max-h-[50vh] overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="text-center text-white/60 mt-8 text-sm">最初のご相談内容を送ってみましょう。</div>
+        ) : (
+          <ul className="space-y-3">
+            {messages.map((m) => (
+              <li key={m.id} className={cls("px-2", m.sender === "querent" ? "text-right" : "text-left")}>
+                <div className={cls("inline-block max-w-[85%] rounded-2xl p-3 shadow-lg",
+                  m.sender === "querent" ? (m.free ? "bg-green-600" : "bg-gradient-to-br from-indigo-600 to-fuchsia-600") : "bg-white/8 border border-white/10"
+                )} data-testid={`message-${m.id}`}>
+                  <div className={cls("text-[10px] mb-1", m.sender === "querent" ? "text-white/70" : "text-white/60")}>
+                    {m.sender === "querent" ? (m.free ? "あなた(無料)" : "あなた") : "占い師"} {timefmt(m.created_at)}
+                  </div>
+                  <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-white/90")}>{m.text}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="fixed bottom-[56px] left-0 right-0 z-20 pb-[env(safe-area-inset-bottom)] px-4">
+        {plan === "points" && (
+          <div className="text-right mb-1 text-[11px] text-white/60">
+            ※ 1pt={YEN_PER_POINT}円 相当。あなたの占い師は <b>{getRankInfo(advisor.rank).jp}</b>（<b>1文字={getRankInfo(advisor.rank).mult}pt</b>）です。
+          </div>
+        )}
+        {uploads.length > 0 && (
+          <div className="mb-2 flex gap-2 overflow-x-auto">
+            {uploads.map((u, idx) => (
+              <div key={idx} className="min-w-[140px] border border-white/15 bg-white/5 rounded-2xl p-2 text-xs flex items-center gap-2 relative">
+                <Paperclip className="w-3 h-3 text-white/60" />
+                <span className="truncate max-w-[96px]" title={u.name}>{u.name}</span>
+                <button onClick={() => removeUpload(idx)} className="absolute top-0 right-0 p-1 text-white/50 hover:text-white text-sm leading-none"><X className="w-3 h-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="bg-[#111a2e] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
+          <textarea value={text} onChange={(e) => { setText(e.target.value); if (showTemplates) setShowTemplates(false); }}
+            onFocus={() => { if (text.trim() === "" && uploads.length === 0) setShowTemplates(true); }}
+            placeholder="ご相談内容を入力..." data-testid="input-chat-message"
+            className="flex-1 bg-transparent outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50" />
+          {showTemplates && (
+            <div className="absolute bottom-[56px] left-0 right-0 w-full bg-[#0d1a33] border border-white/15 rounded-xl p-2 space-y-1 shadow-xl z-30">
+              <div className="text-[11px] text-white/60 pl-2">無料テンプレを選択してすぐ相談</div>
+              {FREE_TEMPLATES.map((t, i) => (
+                <button key={i} className="w-full text-left text-xs bg-white/5 border border-white/10 rounded px-2 py-1" onClick={() => applyTemplate(t)} data-testid={`button-template-${i}`}>
+                  「{truncate(t, 20)}」を挿入
+                </button>
+              ))}
+              <div className="text-right">
+                <button className="text-[10px] text-white/50" onClick={() => setShowTemplates(false)}>閉じる</button>
+              </div>
+            </div>
+          )}
+          <div className="relative">
+            <IconBtn onClick={() => fileInputRef.current?.click()}>
+              <Paperclip className="w-4 h-4" />
+            </IconBtn>
+            <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={onFileChange} />
+          </div>
+          <button onClick={() => onSend({ isFreeTemplate: false })} disabled={text.trim() === "" && uploads.length === 0}
+            className="rounded-xl bg-white text-gray-900 px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" data-testid="button-send-message"
+            title={plan === "subscription" && subscriptionActive ? "月額内" : `送信時 ${text.trim().length * getRankInfo(advisor?.rank || "SILVER").mult}pt 消費`}>
+            送信
           </button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-function DMModal({ advisor, onClose, onSent }: { advisor: Advisor; onClose: () => void; onSent: () => void }) {
-  const [text, setText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+function BottomNav({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) {
+  const items = [
+    { id: "home", label: "ホーム", icon: HomeIcon },
+    { id: "advisors", label: "占い師", icon: Users },
+    { id: "chat", label: "相談", icon: MessageCircle },
+    { id: "account", label: "登録/プラン", icon: Settings },
+  ];
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-30 pb-[env(safe-area-inset-bottom)] bg-[#0d1a33]/80 backdrop-blur border-t border-white/10">
+      <div className="mx-auto max-w-md grid grid-cols-4">
+        {items.map((it) => {
+          const Icon = it.icon;
+          return (
+            <button key={it.id} onClick={() => setActiveTab(it.id)} data-testid={`button-tab-${it.id}`}
+              className={cls("py-3 flex flex-col items-center text-[11px]", activeTab === it.id ? "text-white" : "text-white/60")}>
+              <Icon className="w-5 h-5" />
+              <div className="mt-1">{it.label}</div>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
 
-  async function send() {
-    if (!text.trim()) return;
-    try {
-      setSubmitting(true);
-      await apiRequest("POST", "/api/send_dm", {
-        fortuneteller_id: advisor.user_id,
-        text: text.trim(),
-      });
-      onSent();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+function HomeTab({ advisors, favorites, onFav, onStartChat }: { advisors: Advisor[]; favorites: number[]; onFav: (id: number) => void; onStartChat: (id: number) => void }) {
+  const [selectedGenre, setSelectedGenre] = useState(SAMPLE_GENRES[0]);
+  const sortedAdvisors = useMemo(() => [...advisors].sort(() => Math.random() - 0.5), [advisors]);
+  const filterAndSortByGenre = useMemo(() => sortedAdvisors.filter((a) => (a.tags || []).includes(selectedGenre) || a.headline.includes(selectedGenre)), [selectedGenre, sortedAdvisors]);
 
   return (
-    <div className="dm-modal-overlay" onClick={onClose}>
-      <div className="dm-modal-content p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-bold text-white" data-testid="text-dm-title">
-            {advisor.name}さんにDM
+    <section className="space-y-6">
+      <FeaturedAdvisors advisors={advisors} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+      <div className="h-0 border-t border-white/10 mx-auto w-11/12" />
+      <RankedCarousel title="総合ランキング TOP10" advisors={sortedAdvisors} onStartChat={onStartChat} onFav={onFav} favorites={favorites} limit={10} />
+      <div className="h-0 border-t border-white/10 mx-auto w-11/12" />
+      <div className="space-y-3">
+        <div>
+          <h3 className="font-semibold text-white/90 mb-2 text-sm">ジャンル別ランキング</h3>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {SAMPLE_GENRES.map((g) => {
+              const color = genreColor(g); const active = selectedGenre === g;
+              return (
+                <button key={g} onClick={() => setSelectedGenre(g)} data-testid={`button-genre-${g}`}
+                  className={cls("text-xs rounded-full px-3 py-1 border transition-colors", active ? color.on : color.off)}>#{g}</button>
+              );
+            })}
           </div>
-          <button onClick={onClose} className="text-white/50 hover:text-white" data-testid="button-close-dm"><X className="w-4 h-4" /></button>
         </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} data-testid="textarea-dm"
-          className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-none"
-          placeholder="メッセージを入力..." />
-        <button onClick={send} disabled={submitting || !text.trim()} data-testid="button-send-dm"
-          className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-          {submitting ? "送信中..." : "送信する"}
-        </button>
+        <RankedCarousel title={`${selectedGenre} ランキング TOP10`} advisors={filterAndSortByGenre} onStartChat={onStartChat} onFav={onFav} favorites={favorites}
+          limit={10} emptyText={`「${selectedGenre}」に該当する占い師はいません。`} />
       </div>
+      <RankedCarousel title="お気に入りリスト" advisors={advisors.filter((a) => favorites.includes(a.id))} onStartChat={onStartChat} onFav={onFav} favorites={favorites}
+        limit={advisors.length} showRankBadge={false} emptyText="お気に入りの占い師を登録しましょう" />
+    </section>
+  );
+}
+
+function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null }) {
+  const [tab, setTab] = useState("plan");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null);
+  const [localInfo, setLocalInfo] = useState<QuerentInfo | null>(null);
+
+  useEffect(() => {
+    if (queInfoFromQuery && !localInfo) setLocalInfo(queInfoFromQuery);
+  }, [queInfoFromQuery]);
+
+  const queInfo = localInfo;
+  const setQueInfo = setLocalInfo;
+
+  async function handleUpdateInfo() {
+    if (!queInfo) return;
+    try {
+      setSubmitting(true); setSubmitMsg(null);
+      await apiRequest("POST", "/api/edit_querent_info", {
+        name: queInfo.name, tel_number: queInfo.tel_number, postal_code: queInfo.postal_code, address: queInfo.address,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+      setSubmitMsg("更新しました");
+    } catch (e: any) { setSubmitMsg("更新に失敗しました"); }
+    finally { setSubmitting(false); }
+  }
+
+  async function handleSaveKarte() {
+    if (!queInfo) return;
+    try {
+      await apiRequest("POST", "/api/edit_querent_karte", {
+        birthdate: queInfo.birthdate, zodiac_sign: queInfo.zodiac_sign, birthplace: queInfo.birthplace, birthtime: queInfo.birthtime, worry_category: queInfo.worry_category, worry_message: queInfo.worry_message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+    } catch (e) { console.error("カルテ保存失敗", e); }
+  }
+
+  useEffect(() => {
+    if (tab !== "karte" || !queInfo) return;
+    const timer = setTimeout(handleSaveKarte, 1000);
+    return () => clearTimeout(timer);
+  }, [queInfo?.birthdate, queInfo?.zodiac_sign, queInfo?.birthplace, queInfo?.birthtime, queInfo?.worry_category, queInfo?.worry_message]);
+
+  if (!queInfo) return <div className="text-white/60 text-center py-8">プロフィール情報を読み込み中...</div>;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { id: "plan", label: "プラン" },
+          { id: "signup", label: "登録情報" },
+          { id: "karte", label: "カルテ" },
+        ].map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)} data-testid={`button-account-tab-${t.id}`}
+            className={cls("px-3 py-2 rounded-lg text-xs", tab === t.id ? "bg-white text-gray-900" : "bg-white/10 border border-white/15")}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === "plan" && (
+        <div className="grid grid-cols-1 gap-3">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="font-semibold">月額サブスク</div>
+            <div className="text-sm text-white/70">ポイント消費なし。相談し放題。</div>
+            <div className="mt-3 flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" checked={queInfo.subscription === true} readOnly /> このプランにする
+              </label>
+            </div>
+            <div className="mt-3">
+              <button className={cls("rounded-xl px-4 py-2 text-sm font-semibold", queInfo.subscription ? "bg-emerald-300 text-gray-900" : "bg-white text-gray-900")} data-testid="button-subscribe">
+                {queInfo.subscription ? "契約中" : "Stripeで契約(テスト)"}
+              </button>
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="font-semibold">ポイント制</div>
+            <div className="text-sm text-white/70">1pt={YEN_PER_POINT}円。文字数xランク倍率で消費。</div>
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" checked={!queInfo.subscription} readOnly /> このプランにする
+              </label>
+              <span className="text-sm text-white/80">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-1000">1000pt購入(約{yen(1000)})</button>
+              <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-white text-gray-900" data-testid="button-buy-3000">3000pt購入(約{yen(3000)})</button>
+            </div>
+            <div className="mt-3 text-[11px] text-white/60">※ 実運用ではStripe Webhookで残高反映/サブスク状態をサーバーで管理してください。</div>
+          </div>
+        </div>
+      )}
+
+      {tab === "signup" && (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+          <h2 className="text-lg font-semibold">登録情報</h2>
+          <Input label="名前" value={queInfo.name} onChange={(v) => setQueInfo({ ...queInfo, name: v })} />
+          <Input label="メールアドレス" value={queInfo.email} onChange={(v) => setQueInfo({ ...queInfo, email: v })} type="email" />
+          <Input label="電話番号" value={queInfo.tel_number} onChange={(v) => setQueInfo({ ...queInfo, tel_number: v })} />
+          <div className="grid grid-cols-3 gap-2">
+            <Input label="郵便番号" value={queInfo.postal_code} onChange={(v) => setQueInfo({ ...queInfo, postal_code: v })} />
+            <div className="col-span-2"><Input label="住所" value={queInfo.address} onChange={(v) => setQueInfo({ ...queInfo, address: v })} /></div>
+          </div>
+          <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+            <div className="text-xs text-white/70">
+              {submitMsg && <span className="text-green-300">{submitMsg}</span>}
+            </div>
+            <button onClick={handleUpdateInfo} disabled={submitting} data-testid="button-update-info"
+              className="px-4 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-sm">
+              {submitting ? "送信中..." : "更新する"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "karte" && (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+          <h2 className="text-lg font-semibold">カルテ</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <Input label="生年月日" value={queInfo.birthdate} onChange={(v) => setQueInfo({ ...queInfo, birthdate: v })} placeholder="YYYY-MM-DD" />
+            <Input label="星座" value={queInfo.zodiac_sign} onChange={(v) => setQueInfo({ ...queInfo, zodiac_sign: v })} placeholder="例: しし座" />
+            <Input label="出生地" value={queInfo.birthplace} onChange={(v) => setQueInfo({ ...queInfo, birthplace: v })} />
+            <Input label="出生時間" value={queInfo.birthtime} onChange={(v) => setQueInfo({ ...queInfo, birthtime: v })} placeholder="例: 14:30" />
+          </div>
+          <Select label="お悩みジャンル" value={queInfo.worry_category} onChange={(v) => setQueInfo({ ...queInfo, worry_category: v })} options={SAMPLE_GENRES} />
+          <Textarea label="お悩み内容 (1000文字以内)" value={queInfo.worry_message}
+            onChange={(v) => { if (v.length <= 1000) setQueInfo({ ...queInfo, worry_message: v }); }}
+            hint={`${(queInfo.worry_message || "").length}/1000`} />
+          <div className="text-right text-xs text-white/70">保存は自動です</div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LoggedOutView() {
+  const [, setLocation] = useLocation();
+  const [search, setSearch] = useState("");
+
+  const { data: advisors = [], isLoading: loading } = useQuery<Advisor[]>({
+    queryKey: ["/api/get_fortuneteller_all"],
+  });
+
+  const filtered = advisors.filter((a) => !search || a.name.includes(search) || a.headline.includes(search));
+
+  return (
+    <div className="min-h-screen bg-[#0c1a33] text-white">
+      <header className="sticky top-0 z-30 bg-[#0d1a33] border-b border-white/10">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="text-lg font-bold tracking-wide" data-testid="text-app-title">
+              <Sparkles className="w-5 h-5 inline-block mr-1 text-fuchsia-400" />占いチャット
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setLocation("/querent_login")} data-testid="button-querent-login"
+                className="text-[11px] bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg hover:bg-white/15 transition-colors">相談者ログイン</button>
+              <button onClick={() => setLocation("/fortuneteller_login")} data-testid="button-fortuneteller-login"
+                className="text-[11px] bg-fuchsia-700/80 border border-fuchsia-600/50 px-3 py-1.5 rounded-lg hover:bg-fuchsia-700 transition-colors">占い師ログイン</button>
+            </div>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search"
+            placeholder="占い師を検索..." className="w-full rounded-xl bg-white/8 border border-white/15 pl-9 pr-3 py-2.5 text-sm placeholder:text-white/40 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+        </div>
+        {loading ? (
+          <div className="space-y-3">{[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-4 animate-pulse">
+              <div className="flex items-start gap-3"><div className="w-14 h-14 rounded-full bg-white/10" /><div className="flex-1 space-y-2"><div className="h-4 bg-white/10 rounded w-1/3" /><div className="h-3 bg-white/10 rounded w-2/3" /></div></div>
+            </div>
+          ))}</div>
+        ) : (
+          <CardList advisors={filtered} onStartChat={(id) => setLocation("/querent_login")} onFav={() => {}} favorites={[]} emptyText="占い師が見つかりません" />
+        )}
+      </main>
     </div>
   );
 }
@@ -228,121 +783,59 @@ function DMModal({ advisor, onClose, onSent }: { advisor: Advisor; onClose: () =
 export default function Top() {
   const { user, loading, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"all" | "recommended">("all");
-  const [chatAdvisor, setChatAdvisor] = useState<Advisor | null>(null);
-  const [dmAdvisor, setDmAdvisor] = useState<Advisor | null>(null);
 
-  const { data: advisors, isLoading: advisorsLoading } = useQuery<Advisor[]>({
-    queryKey: ["/api/get_fortuneteller_profiles"],
+  const [plan, setPlan] = useState(() => storage.load("plan", "points"));
+  const [points, setPoints] = useState(200);
+  const [subscriptionActive, setSubscriptionActive] = useState(false);
+  const [favorites, setFavorites] = useState<number[]>(() => storage.load("favorites", []));
+  const [threads, setThreads] = useState<ThreadsMap>({});
+  const [activeTab, setActiveTab] = useState("home");
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState<number | null>(() => storage.load("selectedAdvisorId", null));
+
+  const { data: querentInfo = null } = useQuery<QuerentInfo>({
+    queryKey: ["/api/get_querent_info"],
+    enabled: !!user && user.role === "1",
   });
+
+  useEffect(() => {
+    if (querentInfo) {
+      setPoints(querentInfo.point ?? 0);
+      setSubscriptionActive(querentInfo.subscription ?? false);
+    }
+  }, [querentInfo]);
+
+  const { data: advisors = [], isLoading: loadingAdvisors } = useQuery<Advisor[]>({
+    queryKey: ["/api/get_fortuneteller_all"],
+  });
+
+  useEffect(() => storage.save("plan", plan), [plan]);
+  useEffect(() => storage.save("favorites", favorites), [favorites]);
+  useEffect(() => storage.save("selectedAdvisorId", selectedAdvisorId), [selectedAdvisorId]);
+
+  const selectedAdvisor = useMemo(() => advisors.find((a) => a.id === selectedAdvisorId) || null, [selectedAdvisorId, advisors]);
+  const startChat = (advisorId: number) => { setSelectedAdvisorId(advisorId); setActiveTab("chat"); };
+  const toggleFavorite = (advisorId: number) => setFavorites((prev) => prev.includes(advisorId) ? prev.filter((id) => id !== advisorId) : [...prev, advisorId]);
 
   async function handleLogout() {
     await apiRequest("POST", "/api/logout", {});
     await refreshUser();
+    setLocation("/");
   }
 
-  const filtered = (advisors ?? []).filter((a) => {
-    const matchesSearch = !search || a.name.includes(search) || a.headline.includes(search) || a.intro.includes(search);
-    const matchesTab = tab === "all" || a.is_recommended;
-    return matchesSearch && matchesTab;
-  });
-
-  if (chatAdvisor) {
-    return <ChatPanel advisor={chatAdvisor} onClose={() => setChatAdvisor(null)} />;
-  }
+  if (loading) return <div className="min-h-screen bg-[#0c1a33] text-white flex items-center justify-center"><div className="text-white/60">読み込み中...</div></div>;
+  if (!user || user.role !== "1") return <LoggedOutView />;
 
   return (
-    <div className="min-h-screen bg-[#0c1a33] text-white">
-      <header className="sticky top-0 z-30 bg-[#0d1a33] border-b border-white/10">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-lg font-bold tracking-wide" data-testid="text-app-title">
-              <Sparkles className="w-5 h-5 inline-block mr-1 text-fuchsia-400" />
-              占いチャット
-            </div>
-            <div className="flex items-center gap-2">
-              {loading ? null : user ? (
-                <>
-                  <span className="text-xs text-white/60 hidden sm:inline" data-testid="text-user-email">{user.email}</span>
-                  <button onClick={handleLogout} className="text-xs text-white/50 hover:text-white flex items-center gap-1" data-testid="button-logout">
-                    <LogOut className="w-3.5 h-3.5" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => setLocation("/querent_login")} data-testid="button-querent-login"
-                    className="text-[11px] bg-white/10 border border-white/20 px-3 py-1.5 rounded-lg hover:bg-white/15 transition-colors">
-                    相談者ログイン
-                  </button>
-                  <button onClick={() => setLocation("/fortuneteller_login")} data-testid="button-fortuneteller-login"
-                    className="text-[11px] bg-fuchsia-700/80 border border-fuchsia-600/50 px-3 py-1.5 rounded-lg hover:bg-fuchsia-700 transition-colors">
-                    占い師ログイン
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search"
-            placeholder="占い師を検索..."
-            className="w-full rounded-xl bg-white/8 border border-white/15 pl-9 pr-3 py-2.5 text-sm placeholder:text-white/40 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
-        </div>
-
-        <div className="flex gap-2">
-          <button onClick={() => setTab("all")} data-testid="button-tab-all"
-            className={`tab-label ${tab === "all" ? "tab-selected" : ""}`}>
-            全ての占い師
-          </button>
-          <button onClick={() => setTab("recommended")} data-testid="button-tab-recommended"
-            className={`tab-label ${tab === "recommended" ? "tab-selected" : ""}`}>
-            <Star className="w-3.5 h-3.5 inline-block mr-1" />おすすめ
-          </button>
-        </div>
-
-        {advisorsLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-4 animate-pulse">
-                <div className="flex items-start gap-3">
-                  <div className="w-14 h-14 rounded-full bg-white/10" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-white/10 rounded w-1/3" />
-                    <div className="h-3 bg-white/10 rounded w-2/3" />
-                    <div className="h-3 bg-white/10 rounded w-1/2" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center text-white/40 py-12" data-testid="text-no-advisors">
-            <User className="w-10 h-10 mx-auto mb-3 text-white/20" />
-            <p className="text-sm">占い師が見つかりません</p>
-          </div>
-        ) : (
-          <div className="space-y-3" data-testid="container-advisors">
-            {filtered.map((a) => (
-              <AdvisorCard key={a.user_id} advisor={a} onSelect={(adv) => {
-                if (user) {
-                  setChatAdvisor(adv);
-                } else {
-                  setLocation("/querent_login");
-                }
-              }} />
-            ))}
-          </div>
-        )}
+    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white">
+      <Header user={user} loading={loading} point={querentInfo?.point} subscriptionActive={querentInfo?.subscription} onGoPlan={() => setActiveTab("account")} onLogout={handleLogout} />
+      <main className="px-4 pb-28">
+        {activeTab === "home" && <HomeTab advisors={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />}
+        {activeTab === "advisors" && <Advisors advisorsFromTop={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />}
+        {activeTab === "chat" && <Chat plan={plan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive}
+          advisor={selectedAdvisor} thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined} setThreads={setThreads} onBack={() => setActiveTab("advisors")} querentInfo={querentInfo} />}
+        {activeTab === "account" && <Account queInfoFromQuery={querentInfo} />}
       </main>
-
-      {dmAdvisor && (
-        <DMModal advisor={dmAdvisor} onClose={() => setDmAdvisor(null)} onSent={() => setDmAdvisor(null)} />
-      )}
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );
 }

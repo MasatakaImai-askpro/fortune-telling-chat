@@ -52,6 +52,11 @@ client/
 - POST `/api/register_querent` - Register querent user + profile
 - POST `/api/register_fortuneteller` - Register fortuneteller user + profile
 - GET `/api/get_fortuneteller_profiles` - List all fortunetellers
+- GET `/api/get_fortuneteller_all` - Get all advisors with tags array
+- GET `/api/get_querent_info` - Get logged-in querent's profile info
+- POST `/api/edit_querent_karte` - Update querent karte (Zod validated)
+- POST `/api/edit_querent_info` - Update querent registration info (Zod validated)
+- GET `/api/get_room` - Get existing chat room by fortuneteller ID
 - GET/PATCH `/api/my_fortuneteller_profile` - Own profile management
 - GET/PATCH `/api/my_bank_info` - Own bank info management
 - GET `/api/my_rooms` - List chat rooms
@@ -67,7 +72,20 @@ client/
 - Dark mystical color scheme (deep navy/purple gradients)
 - Fuchsia accent colors
 
+## Top Page Features (top.tsx)
+- Bottom navigation: Home / Advisors / Chat / Account (4 tabs)
+- Home tab: Featured advisors, Overall ranking TOP10, Genre ranking, Favorites list
+- Advisors tab: Search + full advisor list with fav/detail/chat actions
+- Chat tab: Real-time WebSocket chat with point consumption confirmation modal, templates, file attachments
+- Account tab: Plan/Registration/Karte sub-tabs with auto-save karte
+- Favorites: localStorage persistence
+- Genre chip filtering (恋愛/仕事/人間関係/金運/健康)
+- Data fetching: TanStack Query for advisors and querent info
+
 ## Recent Changes
 - 2026-02-06: Complete migration from Django + separate Vite to Express + integrated Vite
 - 2026-02-06: Removed old Django backend and separate frontend directories
 - 2026-02-06: All 6 database tables created via SQL
+- 2026-02-06: Added new API endpoints (get_querent_info, edit_querent_karte, edit_querent_info, get_room, get_fortuneteller_all) with Zod validation
+- 2026-02-06: Rewrote top.tsx with bottom navigation, favorites, ranking carousels, genre filtering, point consumption modal, account management
+- 2026-02-06: Refactored data fetching to use TanStack Query with proper cache invalidation
