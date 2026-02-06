@@ -178,9 +178,12 @@ function Header({ user, loading, point, subscriptionActive, onGoPlan, onLogout }
   );
 }
 
-function AdvisorMiniCard({ advisor, onStartChat, onFav, favorites }: { advisor: Advisor; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[] }) {
+function AdvisorMiniCard({ advisor, onStartChat, onFav, favorites, rankNumber }: { advisor: Advisor; onStartChat: (id: number) => void; onFav: (id: number) => void; favorites: number[]; rankNumber?: number }) {
   return (
-    <div className="min-w-[160px] max-w-[180px] bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2 flex-shrink-0">
+    <div className="relative min-w-[160px] max-w-[180px] bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2 flex-shrink-0">
+      {rankNumber != null && (
+        <div className="absolute top-1.5 left-1.5 z-10 text-[10px] bg-amber-500 text-gray-900 font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{rankNumber}</div>
+      )}
       <div className="flex items-center gap-2">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0"
           data-testid={`avatar-mini-${advisor.id}`}>
@@ -214,11 +217,10 @@ function RankedCarousel({ title, advisors, onStartChat, onFav, favorites, limit 
       {limited.length === 0 ? (
         <div className="text-xs text-white/50 py-4 text-center">{emptyText || "該当なし"}</div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2 pt-1 pl-1 no-scrollbar">
+        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
           {limited.map((a, idx) => (
-            <div key={a.id} className="relative">
-              {showRankBadge && <div className="absolute -top-1 -left-1 z-50 text-[10px] bg-amber-500 text-gray-900 font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-md">{idx + 1}</div>}
-              <AdvisorMiniCard advisor={a} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
+            <div key={a.id}>
+              <AdvisorMiniCard advisor={a} onStartChat={onStartChat} onFav={onFav} favorites={favorites} rankNumber={showRankBadge ? idx + 1 : undefined} />
             </div>
           ))}
         </div>
