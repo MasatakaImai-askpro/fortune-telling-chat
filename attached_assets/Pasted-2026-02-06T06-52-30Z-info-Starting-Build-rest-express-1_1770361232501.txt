@@ -1,0 +1,244 @@
+2026-02-06T06:52:30Z info: Starting Build
+
+> rest-express@1.0.0 build
+> tsx script/build.ts
+
+
+building client...
+
+vite v7.3.1 building client environment for production...
+
+transforming...
+
+✓ 1629 modules transformed.
+
+rendering chunks...
+
+computing gzip size...
+
+../dist/public/index.html                   0.82 kB │ gzip:  0.48 kB
+
+../dist/public/assets/index-CtouGFQu.css   23.78 kB │ gzip:  5.37 kB
+../dist/public/assets/index-Cz1gpYAS.js   247.57 kB │ gzip: 74.08 kB
+✓ built in 2.84s
+
+building server...
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    server/vite.ts:8:45:
+      8 │ const __dirname = path.dirname(fileURLToPath(import.meta.url));
+        ╵                                              ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+
+1 warning
+
+  dist/index.cjs  1.1mb ⚠️
+
+⚡ Done in 220ms
+
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.9.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+npm notice To update run: npm install -g npm@11.9.0
+npm notice
+
+2026-02-06T06:52:37Z info: Pushing pid1 binary layer...
+2026-02-06T06:52:40Z info: Created pid1 binary layer
+2026-02-06T06:52:50Z info: Pushing Repl layer...
+2026-02-06T06:52:50Z info: Pushing hosting layer...
+2026-02-06T06:52:50Z info: Retrieved cached nix layer
+2026-02-06T06:52:50Z info: Created hosting layer
+2026-02-06T06:53:11Z info: Created Repl layer
+2026-02-06T06:53:11Z info: Pushing Repl (cache) layer...
+2026-02-06T06:53:12Z info: Created Repl (cache) layer
+2026-02-06T06:53:14Z info: Pushed image manifest
+2026-02-06T06:53:16Z info: Pushed soci index manifest
+2026-02-06T06:53:19Z info: Creating Autoscale service
+  code: 'ERR_INVALID_ARG_TYPE'
+command finished with error [node ./dist/index.cjs]: exit status 1
+    at node:internal/main/run_main_module:28:49 {
+forwarding local port 5000 to external port 80 (mapped as 1104)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+
+command finished with error [node ./dist/index.cjs]: exit status 1
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+Node.js v20.20.0
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+node:internal/url:1487
+
+  code: 'ERR_INVALID_ARG_TYPE'
+    ^
+    at fileURLToPath (node:internal/url:1487:11)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    ^
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at fileURLToPath (node:internal/url:1487:11)
+starting up user application
+
+metasidecar: loaded enterprise status from environment is_enterprise=false
+Node.js v20.20.0
+node:internal/url:1487
+
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+}
+}
+    ^
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at node:internal/main/run_main_module:28:49 {
+command finished with error [node ./dist/index.cjs]: exit status 1
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+command finished with error [node ./dist/index.cjs]: exit status 1
+node:internal/url:1487
+
+    at fileURLToPath (node:internal/url:1487:11)
+command finished with error [node ./dist/index.cjs]: exit status 1
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+
+node:internal/url:1487
+
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+  code: 'ERR_INVALID_ARG_TYPE'
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+Node.js v20.20.0
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+}
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+
+    at fileURLToPath (node:internal/url:1487:11)
+
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    ^
+    at node:internal/main/run_main_module:28:49 {
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    at node:internal/main/run_main_module:28:49 {
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+node:internal/url:1487
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    ^
+command finished with error [node ./dist/index.cjs]: exit status 1
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    at fileURLToPath (node:internal/url:1487:11)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+  code: 'ERR_INVALID_ARG_TYPE'
+
+    ^
+node:internal/url:1487
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+}
+}
+  code: 'ERR_INVALID_ARG_TYPE'
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+  code: 'ERR_INVALID_ARG_TYPE'
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at fileURLToPath (node:internal/url:1487:11)
+}
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at node:internal/main/run_main_module:28:49 {
+Node.js v20.20.0
+Node.js v20.20.0
+
+Node.js v20.20.0
+    at fileURLToPath (node:internal/url:1487:11)
+node:internal/url:1487
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+  code: 'ERR_INVALID_ARG_TYPE'
+command finished with error [node ./dist/index.cjs]: exit status 1
+  code: 'ERR_INVALID_ARG_TYPE'
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+    ^
+
+    ^
+
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+Node.js v20.20.0
+    at fileURLToPath (node:internal/url:1487:11)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+
+
+  code: 'ERR_INVALID_ARG_TYPE'
+Node.js v20.20.0
+command finished with error [node ./dist/index.cjs]: exit status 1
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+Node.js v20.20.0
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+
+
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+    at fileURLToPath (node:internal/url:1487:11)
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+node:internal/url:1487
+    at node:internal/main/run_main_module:28:49 {
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at node:internal/main/run_main_module:28:49 {
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+}
+    ^
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+}
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+command finished with error [node ./dist/index.cjs]: exit status 1
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+}
+node:internal/url:1487
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+
+    at fileURLToPath (node:internal/url:1487:11)
+    at Module.load (node:internal/modules/cjs/loader:1266:32)
+node:internal/url:1487
+    at node:internal/main/run_main_module:28:49 {
+    at Module._compile (node:internal/modules/cjs/loader:1521:14)
+    at Object.<anonymous> (/home/runner/workspace/dist/index.cjs:88:113589)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string or an instance of URL. Received undefined
+    ^
+    throw new ERR_INVALID_ARG_TYPE('path', ['string', 'URL'], path);
+  code: 'ERR_INVALID_ARG_TYPE'
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at Module._load (node:internal/modules/cjs/loader:1091:12)
+Node.js v20.20.0
+
+command finished with error [node ./dist/index.cjs]: exit status 1
+}
+crash loop detected
+2026-02-06T06:56:21Z error: The deployment is crash looping. This can happen if the run command fails or exits immediately after starting. Check the logs for more information.
