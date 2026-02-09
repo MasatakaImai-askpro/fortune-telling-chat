@@ -50,9 +50,9 @@ const rankLabel: Record<string, string> = {
 };
 const statusLabel: Record<string, string> = { pending: "申請中", approved: "承認済み", transferred: "送金済み" };
 const statusColor: Record<string, string> = {
-  pending: "bg-yellow-600/60 text-yellow-200",
-  approved: "bg-blue-600/60 text-blue-200",
-  transferred: "bg-emerald-600/60 text-emerald-200",
+  pending: "bg-yellow-100 text-yellow-800",
+  approved: "bg-blue-100 text-blue-700",
+  transferred: "bg-emerald-100 text-emerald-700",
 };
 
 function RankingTab() {
@@ -82,31 +82,31 @@ function RankingTab() {
     }
   }
 
-  if (isLoading) return <div className="flex-1 flex items-center justify-center text-white/50">読み込み中...</div>;
+  if (isLoading) return <div className="flex-1 flex items-center justify-center text-gray-500">読み込み中...</div>;
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar">
-      <div className="px-4 py-3 border-b border-white/10">
+      <div className="px-4 py-3 border-b border-pink-200">
         <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-ranking-title">
-          <Trophy className="w-5 h-5 text-amber-400" />
+          <Trophy className="w-5 h-5 text-amber-500" />
           売上ランキング ベスト10
         </h2>
-        <p className="text-[11px] text-white/50 mt-1">過去6ヶ月の売上で自動算出。注目設定のみ管理できます。</p>
+        <p className="text-[11px] text-gray-500 mt-1">過去6ヶ月の売上で自動算出。注目設定のみ管理できます。</p>
       </div>
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-pink-100">
         {(ranking ?? []).map((a) => (
           <div key={a.user_id} className="px-4 py-3" data-testid={`ranking-row-${a.user_id}`}>
             {editing === a.user_id ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-amber-400 w-8">{a.rank_position}</span>
+                  <span className="text-lg font-bold text-amber-500 w-8">{a.rank_position}</span>
                   <span className="text-sm font-semibold">{a.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-[11px] text-white/60">注目:</label>
+                  <label className="text-[11px] text-gray-600">注目:</label>
                   <button onClick={() => setEditRecommended(!editRecommended)} data-testid="button-toggle-recommended"
                     className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                      editRecommended ? "bg-amber-600 border-amber-500 text-white" : "bg-white/5 border-white/10 text-white/50"
+                      editRecommended ? "bg-amber-600 border-amber-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"
                     }`}>
                     {editRecommended ? "注目中" : "非注目"}
                   </button>
@@ -117,31 +117,31 @@ function RankingTab() {
                     <Check className="w-3 h-3 inline mr-1" />保存
                   </button>
                   <button onClick={() => setEditing(null)} data-testid="button-cancel-ranking"
-                    className="text-[11px] px-3 py-1 rounded-lg bg-white/10 text-white/70 hover-elevate active-elevate-2">
+                    className="text-[11px] px-3 py-1 rounded-lg bg-pink-50 text-gray-700 hover-elevate active-elevate-2">
                     <X className="w-3 h-3 inline mr-1" />キャンセル
                   </button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <span className="text-lg font-bold text-amber-400 w-8">{a.rank_position}</span>
+                <span className="text-lg font-bold text-amber-500 w-8">{a.rank_position}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold">{a.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">{a.rank_label || rankLabel[a.rank] || a.rank}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-800">{a.rank_label || rankLabel[a.rank] || a.rank}</span>
                     {a.is_recommended && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
                         <Star className="w-3 h-3 inline" /> 注目
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-white/50 truncate">{a.headline}</div>
-                  <div className="text-[10px] text-white/40 mt-0.5">
+                  <div className="text-xs text-gray-500 truncate">{a.headline}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
                     売上: {a.revenue.toLocaleString()}pt / 換金可能: {a.cashable.toLocaleString()}pt
                   </div>
                 </div>
                 <button onClick={() => startEdit(a)} data-testid={`button-edit-ranking-${a.user_id}`}
-                  className="text-white/40 hover:text-white/80 transition-colors p-1">
+                  className="text-gray-400 hover:text-gray-700 transition-colors p-1">
                   <Edit2 className="w-4 h-4" />
                 </button>
               </div>
@@ -177,31 +177,31 @@ function TransfersTab() {
     }
   }
 
-  if (isLoading) return <div className="flex-1 flex items-center justify-center text-white/50">読み込み中...</div>;
+  if (isLoading) return <div className="flex-1 flex items-center justify-center text-gray-500">読み込み中...</div>;
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar">
-      <div className="px-4 py-3 border-b border-white/10">
+      <div className="px-4 py-3 border-b border-pink-200">
         <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-transfers-title">
           <ArrowLeftRight className="w-5 h-5 text-blue-400" />
           振込申請の承認
         </h2>
-        <p className="text-[11px] text-white/50 mt-1">承認して振込予定日を登録。期日を過ぎると自動的に送金済みになります。</p>
+        <p className="text-[11px] text-gray-500 mt-1">承認して振込予定日を登録。期日を過ぎると自動的に送金済みになります。</p>
       </div>
       {(requests ?? []).length === 0 ? (
-        <div className="text-center text-white/40 text-sm pt-12">振込申請はありません</div>
+        <div className="text-center text-gray-400 text-sm pt-12">振込申請はありません</div>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-pink-100">
           {(requests ?? []).map((r) => (
             <div key={r.id} className="px-4 py-3 space-y-2" data-testid={`transfer-row-${r.id}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold">{r.fortuneteller_name}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${statusColor[r.status] || "bg-white/10 text-white/60"}`}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${statusColor[r.status] || "bg-pink-50 text-gray-600"}`}>
                   {statusLabel[r.status] || r.status}
                 </span>
-                <span className="text-sm font-bold text-amber-300">{r.amount.toLocaleString()}円</span>
+                <span className="text-sm font-bold text-amber-600">{r.amount.toLocaleString()}円</span>
               </div>
-              <div className="text-[10px] text-white/40 space-y-0.5">
+              <div className="text-[10px] text-gray-400 space-y-0.5">
                 <div>申請日: {new Date(r.requested_at).toLocaleDateString("ja-JP")}</div>
                 {r.approved_at && <div>承認日: {new Date(r.approved_at).toLocaleDateString("ja-JP")}</div>}
                 {r.scheduled_transfer_date && <div>振込予定日: {new Date(r.scheduled_transfer_date).toLocaleDateString("ja-JP")}</div>}
@@ -212,13 +212,13 @@ function TransfersTab() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
                       data-testid={`input-transfer-date-${r.id}`}
-                      className="text-[11px] rounded-lg bg-white/10 border border-white/20 px-2 py-1 text-white" />
+                      className="text-[11px] rounded-lg bg-pink-50 border border-pink-200 px-2 py-1 text-gray-900" />
                     <button onClick={() => handleApprove(r.id)} disabled={saving} data-testid={`button-confirm-approve-${r.id}`}
                       className="text-[11px] px-3 py-1 rounded-lg bg-emerald-600 text-white hover-elevate active-elevate-2 disabled:opacity-50">
                       承認する
                     </button>
                     <button onClick={() => { setApprovingId(null); setScheduledDate(""); }} data-testid={`button-cancel-approve-${r.id}`}
-                      className="text-[11px] px-2 py-1 rounded-lg bg-white/10 text-white/70 hover-elevate active-elevate-2">
+                      className="text-[11px] px-2 py-1 rounded-lg bg-pink-50 text-gray-700 hover-elevate active-elevate-2">
                       取消
                     </button>
                   </div>
@@ -303,63 +303,63 @@ function UserManagementTab() {
     }
   }
 
-  if (isLoading) return <div className="flex-1 flex items-center justify-center text-white/50">読み込み中...</div>;
+  if (isLoading) return <div className="flex-1 flex items-center justify-center text-gray-500">読み込み中...</div>;
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar">
-      <div className="px-4 py-3 border-b border-white/10 space-y-2">
+      <div className="px-4 py-3 border-b border-pink-200 space-y-2">
         <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-users-title">
           <Users className="w-5 h-5 text-emerald-400" />
           ユーザー管理
         </h2>
         <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="メール・名前で検索..." data-testid="input-admin-user-search"
-          className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+          className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
           {[{ value: "all", label: "全て" }, { value: "1", label: "相談者" }, { value: "2", label: "占い師" }, { value: "9", label: "管理者" }].map((f) => (
             <button key={f.value} onClick={() => setFilterRole(f.value)} data-testid={`filter-role-${f.value}`}
               className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
                 filterRole === f.value
-                  ? "bg-fuchsia-600 border-fuchsia-500 text-white"
-                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+                  ? "bg-pink-600 border-pink-500 text-white"
+                  : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
               }`}>
               {f.label}
             </button>
           ))}
         </div>
-        <div className="text-[11px] text-white/40">{filtered.length}件</div>
+        <div className="text-[11px] text-gray-400">{filtered.length}件</div>
       </div>
 
       {editingUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-[#111a2e] border border-white/20 rounded-2xl w-full max-w-sm p-4 space-y-3" data-testid="modal-edit-user">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white border border-pink-200 rounded-2xl w-full max-w-sm p-4 space-y-3" data-testid="modal-edit-user">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold">ユーザー編集 (ID: {editingUser.id})</h3>
+              <h3 className="text-sm font-bold text-gray-900">ユーザー編集 (ID: {editingUser.id})</h3>
               <button onClick={() => setEditingUser(null)} data-testid="button-close-edit-modal">
-                <X className="w-5 h-5 text-white/50" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
             <div className="space-y-2">
               <div>
-                <label className="text-[11px] text-white/60 block mb-1">メールアドレス</label>
+                <label className="text-[11px] text-gray-600 block mb-1">メールアドレス</label>
                 <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} data-testid="input-edit-email"
-                  className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+                  className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
               </div>
               {(editingUser.role === "1" || editingUser.role === "2") && (
                 <div>
-                  <label className="text-[11px] text-white/60 block mb-1">名前</label>
+                  <label className="text-[11px] text-gray-600 block mb-1">名前</label>
                   <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} data-testid="input-edit-name"
-                    className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+                    className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
                 </div>
               )}
               {editingUser.role === "2" && (
                 <div>
-                  <label className="text-[11px] text-white/60 block mb-1">ランク</label>
+                  <label className="text-[11px] text-gray-600 block mb-1">ランク</label>
                   <div className="flex gap-1">
                     {["SILVER", "GOLD", "PLATINUM"].map((r) => (
                       <button key={r} onClick={() => setEditRank(r)} data-testid={`button-edit-rank-${r}`}
                         className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                          editRank === r ? "bg-fuchsia-600 border-fuchsia-500 text-white" : "bg-white/5 border-white/10 text-white/50"
+                          editRank === r ? "bg-pink-600 border-pink-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"
                         }`}>
                         {rankLabel[r]}
                       </button>
@@ -370,15 +370,15 @@ function UserManagementTab() {
               {editingUser.role === "1" && (
                 <>
                   <div>
-                    <label className="text-[11px] text-white/60 block mb-1">ポイント</label>
+                    <label className="text-[11px] text-gray-600 block mb-1">ポイント</label>
                     <input type="number" value={editPoints} onChange={(e) => setEditPoints(e.target.value)} data-testid="input-edit-points"
-                      className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+                      className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-white/60">サブスク会員:</label>
+                    <label className="text-[11px] text-gray-600">サブスク会員:</label>
                     <button onClick={() => setEditSub(!editSub)} data-testid="button-edit-sub"
                       className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                        editSub ? "bg-amber-600 border-amber-500 text-white" : "bg-white/5 border-white/10 text-white/50"
+                        editSub ? "bg-amber-600 border-amber-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"
                       }`}>
                       {editSub ? "有効" : "無効"}
                     </button>
@@ -392,7 +392,7 @@ function UserManagementTab() {
                 保存
               </button>
               <button onClick={() => setEditingUser(null)} data-testid="button-cancel-edit"
-                className="text-[11px] px-4 py-1.5 rounded-lg bg-white/10 text-white/70 hover-elevate active-elevate-2">
+                className="text-[11px] px-4 py-1.5 rounded-lg bg-pink-50 text-gray-700 hover-elevate active-elevate-2">
                 キャンセル
               </button>
             </div>
@@ -400,7 +400,7 @@ function UserManagementTab() {
         </div>
       )}
 
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-pink-100">
         {filtered.map((u) => (
           <div key={u.id} className="px-4 py-3 flex items-center gap-3" data-testid={`user-row-${u.id}`}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0" style={{
@@ -412,23 +412,23 @@ function UserManagementTab() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold" data-testid={`text-user-name-${u.id}`}>{u.profile_name || u.email}</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
-                  u.role === "9" ? "bg-red-700/50 text-red-200" : u.role === "2" ? "bg-fuchsia-700/50 text-fuchsia-200" : "bg-blue-700/50 text-blue-200"
+                  u.role === "9" ? "bg-red-100 text-red-700" : u.role === "2" ? "bg-pink-100 text-pink-800" : "bg-blue-100 text-blue-700"
                 }`}>{u.role_label}</span>
-                {u.rank && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/60">{u.rank_label || rankLabel[u.rank] || u.rank}</span>}
-                {u.is_subscription && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200">サブスク</span>}
+                {u.rank && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-pink-50 text-gray-600">{u.rank_label || rankLabel[u.rank] || u.rank}</span>}
+                {u.is_subscription && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">サブスク</span>}
               </div>
-              <div className="text-[10px] text-white/30 truncate">{u.email}</div>
-              {u.points != null && <div className="text-[10px] text-white/30">{u.points}pt</div>}
+              <div className="text-[10px] text-gray-300 truncate">{u.email}</div>
+              {u.points != null && <div className="text-[10px] text-gray-300">{u.points}pt</div>}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               {u.role !== "9" && (
                 <>
                   <button onClick={() => startEdit(u)} data-testid={`button-edit-user-${u.id}`}
-                    className="p-1.5 text-white/40 hover:text-white/80 transition-colors">
+                    className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors">
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button onClick={() => handleDelete(u.id)} disabled={deletingId === u.id} data-testid={`button-delete-user-${u.id}`}
-                    className="p-1.5 text-white/40 hover:text-red-400 transition-colors disabled:opacity-50">
+                    className="p-1.5 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </>
@@ -457,7 +457,7 @@ export default function AdminApp() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white/50">読み込み中...</div>
+        <div className="text-gray-500">読み込み中...</div>
       </div>
     );
   }
@@ -478,11 +478,11 @@ export default function AdminApp() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0a0e1a] to-[#111a2e] text-white flex flex-col max-w-lg mx-auto">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white text-gray-900 flex flex-col max-w-lg mx-auto">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-pink-200">
         <h1 className="text-base font-bold" data-testid="text-admin-title">管理者ダッシュボード</h1>
         <button onClick={handleLogout} data-testid="button-admin-logout"
-          className="text-[11px] text-white/50 hover:text-white/80 flex items-center gap-1">
+          className="text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1">
           <LogOut className="w-4 h-4" /> ログアウト
         </button>
       </div>
@@ -493,14 +493,14 @@ export default function AdminApp() {
         {tab === "users" && <UserManagementTab />}
       </div>
 
-      <nav className="border-t border-white/10 bg-[#0a0e1a] flex justify-around py-2 safe-area-bottom" data-testid="nav-admin-bottom">
+      <nav className="border-t border-pink-200 bg-white flex justify-around py-2 safe-area-bottom" data-testid="nav-admin-bottom">
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.key;
           return (
             <button key={t.key} onClick={() => setTab(t.key)} data-testid={`tab-admin-${t.key}`}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] transition-colors ${
-                active ? "text-fuchsia-400" : "text-white/40 hover:text-white/70"
+                active ? "text-pink-600" : "text-gray-400 hover:text-gray-700"
               }`}>
               <Icon className="w-5 h-5" />
               <span>{t.label}</span>

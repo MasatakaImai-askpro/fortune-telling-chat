@@ -90,26 +90,26 @@ export default function QuerentRegistration() {
     return (
       <label className="block text-sm">
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-white/80">{label}</span>
+          <span className="text-gray-700">{label}</span>
           {required && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md">必須</span>}
         </div>
         <input type={type} value={fields[field]} onChange={(e) => set(field, e.target.value)} placeholder={placeholder}
           data-testid={`input-${field}`}
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
-        {errors[field] && <p className="text-red-400 text-xs mt-0.5">{errors[field]}</p>}
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+        {errors[field] && <p className="text-red-500 text-xs mt-0.5">{errors[field]}</p>}
       </label>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white flex items-start justify-center p-6 pt-10">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl space-y-5">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white text-gray-900 flex items-start justify-center p-6 pt-10">
+      <div className="w-full max-w-md bg-white border border-pink-200 rounded-2xl p-6 shadow-lg space-y-5">
         <div className="text-center">
-          <div className="text-xl font-bold" data-testid="text-page-title">相談者様 新規登録</div>
-          <div className="text-xs text-white/50 mt-1">お気軽にご登録ください</div>
+          <div className="text-xl font-bold text-gray-900" data-testid="text-page-title">相談者様 新規登録</div>
+          <div className="text-xs text-gray-500 mt-1">お気軽にご登録ください</div>
         </div>
         {serverError && (
-          <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2" data-testid="text-error">
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="text-error">
             {serverError}
           </div>
         )}
@@ -123,35 +123,35 @@ export default function QuerentRegistration() {
           <InputField label="住所" field="address" placeholder="東京都渋谷区..." />
           <InputField label="生年月日" field="birthdate" type="date" />
           <label className="block text-sm">
-            <span className="text-white/80">星座</span>
+            <span className="text-gray-700">星座</span>
             <select value={fields.zodiacSign} onChange={(e) => set("zodiacSign", e.target.value)} data-testid="select-zodiacSign"
-              className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 focus:outline-none">
-              {zodiacSigns.map((z) => <option key={z} value={z} className="bg-gray-800">{z}</option>)}
+              className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+              {zodiacSigns.map((z) => <option key={z} value={z}>{z}</option>)}
             </select>
           </label>
           <InputField label="出生地" field="birthplace" placeholder="東京" required={false} />
           <InputField label="出生時間" field="birthtime" type="time" required={false} />
           <label className="block text-sm">
-            <span className="text-white/80">お悩みカテゴリ</span>
+            <span className="text-gray-700">お悩みカテゴリ</span>
             <select value={fields.worryCategory} onChange={(e) => set("worryCategory", e.target.value)} data-testid="select-worryCategory"
-              className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 focus:outline-none">
-              {worryCategories.map((c) => <option key={c.value} value={c.value} className="bg-gray-800">{c.label}</option>)}
+              className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+              {worryCategories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </label>
           <label className="block text-sm">
-            <span className="text-white/80">お悩みメッセージ</span>
+            <span className="text-gray-700">お悩みメッセージ</span>
             <textarea value={fields.worryMessage} onChange={(e) => set("worryMessage", e.target.value)} rows={3} data-testid="textarea-worryMessage"
-              className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-none"
+              className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-none"
               placeholder="お悩みの詳細をご記入ください..." />
           </label>
         </div>
         <button onClick={handleSubmit} disabled={submitting} data-testid="button-register"
-          className="w-full py-2.5 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+          className="w-full py-2.5 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
           {submitting ? "登録中..." : "登録する"}
         </button>
-        <div className="text-center text-[11px] text-white/60">
+        <div className="text-center text-[11px] text-gray-600">
           すでに登録済みの方は
-          <button className="ml-1 text-amber-300 hover:text-amber-200 underline underline-offset-2" data-testid="link-login"
+          <button className="ml-1 text-pink-600 hover:text-pink-700 underline underline-offset-2" data-testid="link-login"
             onClick={() => setLocation("/querent_login")}>ログインはこちら</button>
         </div>
       </div>

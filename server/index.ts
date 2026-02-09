@@ -3,16 +3,22 @@ import session from "express-session";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import bcrypt from "bcrypt";
+import path from "path";
+import fs from "fs";
 import { storage, computeRankFromRevenue } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 
+const UPLOADS_DIR = path.resolve("uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 const PgStore = connectPgSimple(session);
 const sessionMiddleware = session({
@@ -424,6 +430,30 @@ async function seedDatabase() {
   }
 }
 
+async function backfillSampleImages() {
+  try {
+    const profiles = await storage.getAllFortunetellerProfiles();
+    let updated = 0;
+    for (let i = 0; i < profiles.length; i++) {
+      const p = profiles[i];
+      const needsIcon = !p.iconImage || p.iconImage === "";
+      const needsBanner = !p.profileImage || p.profileImage === "";
+      if (needsIcon || needsBanner) {
+        const data: any = {};
+        const iconIdx = (i % 5) + 1;
+        const bannerIdx = (i % 5) + 1;
+        if (needsIcon) data.iconImage = `/uploads/sample_icon_0${iconIdx}.png`;
+        if (needsBanner) data.profileImage = `/uploads/sample_banner_0${bannerIdx}.png`;
+        await storage.updateFortunetellerProfile(p.userId, data);
+        updated++;
+      }
+    }
+    if (updated > 0) log(`Backfilled sample images for ${updated} fortuneteller profiles.`);
+  } catch (e: any) {
+    log(`Image backfill skipped: ${e.message}`);
+  }
+}
+
 async function backfillStylesAndMethods() {
   try {
     const styles = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
@@ -452,6 +482,7 @@ async function backfillStylesAndMethods() {
   await seedDatabase();
   await seedAdminAndSubscriptions();
   await backfillStylesAndMethods();
+  await backfillSampleImages();
 
   if (app.get("env") === "development") {
     await setupVite(app, server);

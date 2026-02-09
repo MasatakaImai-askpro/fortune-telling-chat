@@ -4,47 +4,47 @@
 
 @layer base {
   :root {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 14%;
-    --card-foreground: 210 40% 98%;
-    --card-border: 222 30% 22%;
-    --popover: 222 47% 14%;
-    --popover-foreground: 210 40% 98%;
-    --popover-border: 222 30% 22%;
-    --primary: 292 84% 61%;
+    --background: 0 0% 98%;
+    --foreground: 340 10% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 340 10% 20%;
+    --card-border: 340 20% 90%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 340 10% 20%;
+    --popover-border: 340 20% 90%;
+    --primary: 330 65% 50%;
     --primary-foreground: 0 0% 100%;
-    --primary-border: hsla(292, 84%, 61%, 0.5);
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --secondary-border: hsla(217, 33%, 27%, 0.5);
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --muted-border: hsla(217, 33%, 27%, 0.3);
-    --accent: 217 33% 20%;
-    --accent-foreground: 210 40% 98%;
-    --accent-border: hsla(217, 33%, 30%, 0.5);
+    --primary-border: hsla(330, 65%, 50%, 0.5);
+    --secondary: 340 30% 95%;
+    --secondary-foreground: 340 10% 30%;
+    --secondary-border: hsla(340, 30%, 85%, 0.5);
+    --muted: 340 20% 95%;
+    --muted-foreground: 340 10% 50%;
+    --muted-border: hsla(340, 20%, 85%, 0.3);
+    --accent: 340 30% 93%;
+    --accent-foreground: 340 10% 25%;
+    --accent-border: hsla(340, 30%, 83%, 0.5);
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --destructive-border: hsla(0, 84%, 60%, 0.5);
-    --border: 217 33% 22%;
-    --input: 217 33% 22%;
-    --ring: 292 84% 61%;
-    --chart-1: 292 84% 61%;
-    --chart-2: 330 80% 60%;
+    --border: 340 20% 90%;
+    --input: 340 20% 88%;
+    --ring: 330 65% 50%;
+    --chart-1: 330 65% 50%;
+    --chart-2: 350 60% 55%;
     --chart-3: 37 90% 55%;
     --chart-4: 200 80% 55%;
     --chart-5: 150 60% 50%;
-    --sidebar: 222 47% 9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 18%;
-    --sidebar-ring: 292 84% 61%;
-    --sidebar-primary: 292 84% 61%;
+    --sidebar: 340 30% 97%;
+    --sidebar-foreground: 340 10% 25%;
+    --sidebar-border: 340 20% 90%;
+    --sidebar-ring: 330 65% 50%;
+    --sidebar-primary: 330 65% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-primary-border: hsla(292, 84%, 61%, 0.5);
-    --sidebar-accent: 217 33% 15%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-accent-border: hsla(217, 33%, 25%, 0.3);
+    --sidebar-primary-border: hsla(330, 65%, 50%, 0.5);
+    --sidebar-accent: 340 30% 93%;
+    --sidebar-accent-foreground: 340 10% 25%;
+    --sidebar-accent-border: hsla(340, 30%, 83%, 0.3);
   }
 
   html, body, #root {
@@ -65,34 +65,35 @@
 
 @layer components {
   .tab-label {
-    @apply bg-white/10 border border-white/20 text-white transition-colors duration-200 rounded-lg px-4 py-2 text-sm;
+    @apply bg-pink-50 border border-pink-200 text-pink-800 transition-colors duration-200 rounded-lg px-4 py-2 text-sm;
   }
   .tab-selected {
-    @apply bg-white text-gray-900 font-semibold border-white;
+    @apply bg-pink-600 text-white font-semibold border-pink-600;
   }
   .logged-in-header {
-    background-color: #0d1a33;
+    background-color: #fff;
+    border-bottom: 1px solid hsl(340, 20%, 90%);
     padding: 1rem 1rem 0.5rem;
   }
   .unopened-msg {
     text-align: center;
-    background-color: #2b3a62;
-    border: 1px dashed #6d85c8;
-    color: #c8d3ee;
+    background-color: #fdf2f8;
+    border: 1px dashed #f9a8d4;
+    color: #9d174d;
     padding: 0.75rem;
     border-radius: 1rem;
     cursor: pointer;
   }
   .sejutsu-panel {
-    background-color: rgba(245,158,11,.1);
-    border: 1px solid rgba(245,158,11,.5);
+    background-color: rgba(245,158,11,.08);
+    border: 1px solid rgba(245,158,11,.3);
     padding: 1rem;
     border-radius: .75rem;
     margin-top: .5rem;
   }
   .dm-modal-content {
-    background-color: #0d1a33;
-    border: 1px solid rgba(255,255,255,.1);
+    background-color: #fff;
+    border: 1px solid hsl(340, 20%, 90%);
     border-radius: 1rem;
     width: 90%;
     max-width: 500px;
@@ -111,7 +112,7 @@
   .dm-modal-overlay {
     position: fixed;
     inset: 0;
-    background-color: rgba(0,0,0,.7);
+    background-color: rgba(0,0,0,.4);
     backdrop-filter: blur(4px);
     z-index: 50;
     display: flex;

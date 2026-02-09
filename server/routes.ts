@@ -3,6 +3,23 @@ import { storage, computeRankFromRevenue, RANK_THRESHOLDS } from "./storage";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import multer from "multer";
+import sharp from "sharp";
+import path from "path";
+import fs from "fs";
+
+const UPLOADS_DIR = path.resolve("uploads");
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("JPEG/PNG/WebP/GIF画像のみアップロード可能です"));
+    }
+  },
+});
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) {
@@ -95,6 +112,55 @@ export function registerRoutes(app: Express) {
       await storage.markPasswordResetTokenUsed(token);
       res.json({ message: "パスワードが正常にリセットされました。新しいパスワードでログインしてください。" });
     } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/upload_image", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "画像ファイルを選択してください" });
+
+      const imageType = req.body.type as string;
+      if (!imageType || !["icon", "banner"].includes(imageType)) {
+        return res.status(400).json({ error: "typeはiconまたはbannerを指定してください" });
+      }
+
+      const metadata = await sharp(file.buffer).metadata();
+      const w = metadata.width || 0;
+      const h = metadata.height || 0;
+
+      if (imageType === "icon") {
+        if (file.size > 2 * 1024 * 1024) {
+          return res.status(400).json({ error: "アイコン画像は2MB以下にしてください" });
+        }
+        const ratio = w / h;
+        if (ratio < 0.9 || ratio > 1.1) {
+          return res.status(400).json({ error: "アイコン画像は正方形（1:1）の画像を使用してください。現在の縦横比: " + ratio.toFixed(2) });
+        }
+      } else {
+        const ratio = w / h;
+        if (ratio < 1.5 || ratio > 2.0) {
+          return res.status(400).json({ error: "バナー画像は横長（16:9〜2:1）の画像を使用してください。現在の縦横比: " + ratio.toFixed(2) });
+        }
+      }
+
+      const ext = "webp";
+      const filename = `${imageType}_${req.session.userId}_${Date.now()}.${ext}`;
+      const outputPath = path.join(UPLOADS_DIR, filename);
+
+      if (imageType === "icon") {
+        await sharp(file.buffer).resize(200, 200, { fit: "cover" }).webp({ quality: 85 }).toFile(outputPath);
+      } else {
+        await sharp(file.buffer).resize(800, 450, { fit: "cover" }).webp({ quality: 85 }).toFile(outputPath);
+      }
+
+      const url = `/uploads/${filename}`;
+      res.json({ url, message: "画像をアップロードしました" });
+    } catch (e: any) {
+      if (e.message?.includes("アップロード")) {
+        return res.status(400).json({ error: e.message });
+      }
       res.status(500).json({ error: e.message });
     }
   });

@@ -42,10 +42,10 @@ export default function PasswordReset() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white flex items-start justify-center p-6 pt-16">
-        <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl space-y-4 text-center">
-          <div className="text-red-300 text-sm">無効なリセットリンクです。</div>
-          <button className="text-[11px] text-white/60 hover:text-white/80 transition-colors flex items-center gap-1 mx-auto"
+      <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white text-gray-900 flex items-start justify-center p-6 pt-16">
+        <div className="w-full max-w-md bg-white border border-pink-200 rounded-2xl p-6 shadow-lg space-y-4 text-center">
+          <div className="text-red-600 text-sm">無効なリセットリンクです。</div>
+          <button className="text-[11px] text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1 mx-auto"
             data-testid="link-back-login" onClick={() => setLocation("/querent_login")}>
             <ArrowLeft className="w-3 h-3" />
             ログイン画面に戻る
@@ -56,35 +56,35 @@ export default function PasswordReset() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,#3a1777_0%,#13254a_45%,#0c1a33_100%)] text-white flex items-start justify-center p-6 pt-16">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white text-gray-900 flex items-start justify-center p-6 pt-16">
+      <div className="w-full max-w-md bg-white border border-pink-200 rounded-2xl p-6 shadow-lg space-y-6">
         <div className="text-center space-y-2">
-          <KeyRound className="w-10 h-10 mx-auto text-fuchsia-400" />
-          <div className="text-xl font-bold" data-testid="text-page-title">パスワード再設定</div>
-          <div className="text-xs text-white/60 leading-relaxed">
+          <KeyRound className="w-10 h-10 mx-auto text-pink-500" />
+          <div className="text-xl font-bold text-gray-900" data-testid="text-page-title">パスワード再設定</div>
+          <div className="text-xs text-gray-500 leading-relaxed">
             新しいパスワードを入力してください。
           </div>
         </div>
 
         {error && (
-          <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2" data-testid="text-error">
+          <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="text-error">
             {error}
           </div>
         )}
 
         {success ? (
           <div className="space-y-4">
-            <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-3 flex items-start gap-2" data-testid="text-success">
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-3 flex items-start gap-2" data-testid="text-success">
               <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>パスワードが正常にリセットされました。新しいパスワードでログインしてください。</span>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setLocation("/querent_login")} data-testid="link-querent-login"
-                className="flex-1 py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm">
+                className="flex-1 py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm">
                 相談者ログイン
               </button>
               <button onClick={() => setLocation("/fortuneteller_login")} data-testid="link-fortuneteller-login"
-                className="flex-1 py-2 rounded-xl bg-white/10 border border-white/20 text-white font-semibold hover:bg-white/15 transition-colors text-sm">
+                className="flex-1 py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 font-semibold hover:bg-pink-100 transition-colors text-sm">
                 占い師ログイン
               </button>
             </div>
@@ -93,24 +93,24 @@ export default function PasswordReset() {
           <div className="space-y-4">
             <label className="block text-sm">
               <div className="flex items-center gap-1">
-                <span className="text-white/80">新しいパスワード</span>
+                <span className="text-gray-700">新しいパスワード</span>
                 <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md">必須</span>
               </div>
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" data-testid="input-new-password"
-                className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none"
+                className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none"
                 placeholder="6文字以上" />
             </label>
             <label className="block text-sm">
               <div className="flex items-center gap-1">
-                <span className="text-white/80">新しいパスワード（確認）</span>
+                <span className="text-gray-700">新しいパスワード（確認）</span>
                 <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md">必須</span>
               </div>
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" data-testid="input-confirm-password"
-                className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-pink-400 focus:outline-none"
+                className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none"
                 placeholder="もう一度入力" />
             </label>
             <button onClick={handleReset} disabled={submitting} data-testid="button-reset"
-              className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+              className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
               {submitting ? "リセット中..." : "パスワードをリセット"}
             </button>
           </div>
@@ -118,7 +118,7 @@ export default function PasswordReset() {
 
         {!success && (
           <div className="text-center">
-            <button className="text-[11px] text-white/60 hover:text-white/80 transition-colors flex items-center gap-1 mx-auto"
+            <button className="text-[11px] text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1 mx-auto"
               data-testid="link-back-login" onClick={() => window.history.back()}>
               <ArrowLeft className="w-3 h-3" />
               戻る

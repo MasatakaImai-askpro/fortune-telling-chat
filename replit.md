@@ -92,7 +92,7 @@ client/
 - Bottom navigation: Chat / Querent List / Profile / Bank (4 tabs)
 - Chat tab: Room list with real-time WebSocket messaging
 - Querent List tab: View all 30 querents, search/filter, multi-select, send bulk messages (150 char limit)
-- Profile tab: Edit fortuneteller name, headline, intro
+- Profile tab: Edit fortuneteller name, headline, intro, file upload for icon (1:1, 2MB) and banner (16:9-2:1, 5MB) images with client+server validation
 - Bank tab: Edit bank account details
 
 ## Test Data
@@ -116,3 +116,6 @@ client/
 - 2026-02-09: Added admin dashboard (/admin) with 3 tabs: ranking management (edit rank/featured status), transfer request approval (approve with scheduled date, auto-mark transferred), user management (search/filter/edit/delete). Admin role="9", admin user: admin@example.com (Test1234). Added transfer_requests table, subscription filter in querent list, 10 seed subscriptions.
 - 2026-02-09: Implemented automatic ranking system based on 6-month revenue. 7 tiers: Bronze (30,000pt min), Silver (100,000pt), Gold (200,000pt), Platinum (500,000pt), Platinum+ (800,000pt), Diamond (1,200,000pt), Diamond+ (2,000,000pt). 50% cashable rate. Ranks auto-computed via computeRankFromRevenue(). Admin can only edit is_recommended flag; ranking tab shows revenue/cashable data.
 - 2026-02-09: Added unread message badges. Messages track is_read_by_querent/is_read_by_fortuneteller booleans. New APIs: GET /api/unread_count, POST /api/rooms/:id/mark_read. Both querent and fortuneteller apps show red unread count badges on chat tabs (polled every 10s) and per-room badges in room lists. Messages auto-marked read via WebSocket mark_read events.
+- 2026-02-09: Implemented image upload system: POST /api/upload_image (multer + sharp), validates aspect ratios (icon 1:1 ±0.1, banner 16:9-2:1), file size limits (icon 2MB, banner 5MB), converts to WebP, saves to /uploads/. Replaced URL text inputs with file upload buttons in profile settings with client-side validation and preview.
+- 2026-02-09: Generated 5 sample icon + 5 sample banner images, backfillSampleImages() assigns them to all 30 fortuneteller profiles on startup.
+- 2026-02-09: Complete color scheme overhaul from dark navy/purple/fuchsia to white + light pink + dark pink theme. Updated CSS variables in index.css and all pages (top.tsx, advisor-app.tsx, admin-app.tsx, all login/registration/password pages). New palette: white/pink-50 backgrounds, pink-600 primary buttons, pink-200 borders, gray-900/600/400 text hierarchy.

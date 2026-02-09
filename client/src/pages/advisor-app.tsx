@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle } from "lucide-react";
+import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle, Upload, AlertCircle } from "lucide-react";
 
 type Room = {
   id: string;
@@ -69,13 +69,13 @@ const isValidJapaneseText = (text: string) => text.trim() === "" || FULLWIDTH_RE
 
 function getBubbleColor(m: Message): string {
   if (m.sender === "fortuneteller") {
-    if (m.category === "treatment") return "bg-amber-700/80 text-white rounded-br-md";
-    if (m.category === "length_paying") return "bg-fuchsia-700/80 text-white rounded-br-md";
-    return "bg-emerald-700/60 text-white rounded-br-md";
+    if (m.category === "treatment") return "bg-amber-100 text-amber-900 rounded-br-md";
+    if (m.category === "length_paying") return "bg-pink-100 text-pink-900 rounded-br-md";
+    return "bg-emerald-100 text-emerald-900 rounded-br-md";
   }
-  if (m.free || m.category === "free") return "bg-emerald-700/60 text-white/90 rounded-bl-md";
-  if (m.category === "treatment") return "bg-amber-700/80 text-white/90 rounded-bl-md";
-  return "bg-white/10 text-white/90 rounded-bl-md";
+  if (m.free || m.category === "free") return "bg-emerald-50 text-emerald-800 rounded-bl-md";
+  if (m.category === "treatment") return "bg-amber-50 text-amber-800 rounded-bl-md";
+  return "bg-gray-100 text-gray-800 rounded-bl-md";
 }
 
 function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
@@ -167,20 +167,20 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
-        <button onClick={onBack} className="text-white/70 hover:text-white" data-testid="button-back-rooms">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-pink-200">
+        <button onClick={onBack} className="text-gray-500 hover:text-gray-800" data-testid="button-back-rooms">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold truncate" data-testid="text-chat-querent">{room.querent_name}</div>
-          <div className="text-[10px] text-white/50">{connected ? "接続中" : "接続中..."}</div>
+          <div className="text-sm font-semibold truncate text-gray-900" data-testid="text-chat-querent">{room.querent_name}</div>
+          <div className="text-[10px] text-gray-400">{connected ? "接続中" : "接続中..."}</div>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar" data-testid="container-ft-messages">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar bg-pink-50/50" data-testid="container-ft-messages">
         {messages.length === 0 && (
-          <div className="text-center text-white/40 text-sm pt-12">
-            <MessageCircle className="w-8 h-8 mx-auto mb-3 text-fuchsia-400/50" />
+          <div className="text-center text-gray-400 text-sm pt-12">
+            <MessageCircle className="w-8 h-8 mx-auto mb-3 text-pink-300" />
             <p>メッセージはまだありません</p>
           </div>
         )}
@@ -188,16 +188,16 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
           <div key={m.id} className={`flex ${m.sender === "fortuneteller" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${getBubbleColor(m)}`} data-testid={`ft-message-${m.id}`}>
               {m.category === "treatment" && m.title && (
-                <div className="text-[11px] font-bold mb-1 border-b border-white/20 pb-1" data-testid={`ft-msg-title-${m.id}`}>
+                <div className="text-[11px] font-bold mb-1 border-b border-gray-300 pb-1" data-testid={`ft-msg-title-${m.id}`}>
                   {m.title}
                 </div>
               )}
               {m.is_locked ? (
-                <div className="text-xs italic text-white/50">[施術 - 開封待ち: {m.cost_pt ?? 0}pt]</div>
+                <div className="text-xs italic text-gray-500">[施術 - 開封待ち: {m.cost_pt ?? 0}pt]</div>
               ) : (
                 m.text
               )}
-              <div className="text-[10px] text-white/40 mt-1 text-right">
+              <div className="text-[10px] text-gray-400 mt-1 text-right">
                 {new Date(m.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                 {m.cost_pt ? ` (${m.cost_pt}pt)` : ""}
                 {m.category === "treatment" && " [施術]"}
@@ -208,15 +208,15 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         ))}
       </div>
 
-      <div className="border-t border-white/10 bg-[#0d1a33]">
+      <div className="border-t border-pink-200 bg-white">
         <div className="flex items-center gap-1 px-3 pt-2">
           {(["free", "length_paying", "treatment"] as const).map((cat) => (
             <button key={cat} onClick={() => setMsgCategory(cat)}
               data-testid={`button-category-${cat}`}
               className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
                 msgCategory === cat
-                  ? cat === "treatment" ? "bg-amber-600 border-amber-500 text-white" : "bg-fuchsia-600 border-fuchsia-500 text-white"
-                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+                  ? cat === "treatment" ? "bg-amber-600 border-amber-500 text-white" : "bg-pink-600 border-pink-500 text-white"
+                  : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
               }`}>
               {cat === "free" ? "無料" : cat === "length_paying" ? "文字課金" : "施術"}
             </button>
@@ -226,23 +226,23 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
           <div className="px-3 pt-2 space-y-1">
             <input type="text" value={treatmentTitle} onChange={(e) => handleTitleChange(e.target.value)} data-testid="input-treatment-title"
               placeholder="施術タイトル" maxLength={100}
-              className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-1.5 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
+              className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
             {input.trim().length > 0 && (
-              <div className="text-[11px] text-amber-300" data-testid="text-treatment-cost">
+              <div className="text-[11px] text-amber-600" data-testid="text-treatment-cost">
                 自動計算: {input.trim().length}文字 x 10円 = <b>{treatmentCost.toLocaleString()}円（{treatmentCost}pt）</b>
               </div>
             )}
           </div>
         )}
-        {inputError && <div className="text-[10px] text-red-400 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
+        {inputError && <div className="text-[10px] text-red-600 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
         <div className="flex items-center gap-2 p-3">
           <input type="text" value={input} onChange={(e) => handleInputChange(e.target.value)} data-testid="input-ft-message"
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
             placeholder={msgCategory === "treatment" ? "施術の本文を入力..." : "メッセージを入力..."}
-            className="flex-1 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
           <button onClick={sendMessage} data-testid="button-ft-send"
             disabled={!!inputError || !input.trim()}
-            className="w-9 h-9 rounded-full bg-fuchsia-600 flex items-center justify-center transition-colors disabled:opacity-50 hover-elevate active-elevate-2">
+            className="w-9 h-9 rounded-full bg-pink-600 flex items-center justify-center transition-colors disabled:opacity-50 hover-elevate active-elevate-2">
             <Send className="w-4 h-4 text-white" />
           </button>
         </div>
@@ -255,16 +255,16 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="container-rooms">
       {rooms.length === 0 ? (
-        <div className="text-center text-white/40 text-sm pt-12">
-          <Users className="w-8 h-8 mx-auto mb-3 text-fuchsia-400/50" />
+        <div className="text-center text-gray-400 text-sm pt-12">
+          <Users className="w-8 h-8 mx-auto mb-3 text-pink-300" />
           <p>相談者からのメッセージはまだありません</p>
         </div>
       ) : (
         rooms.map((r) => (
           <div key={r.id} onClick={() => onSelect(r)}
-            className="flex items-center gap-3 px-4 py-3 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+            className="flex items-center gap-3 px-4 py-3 border-b border-pink-100 hover:bg-pink-50 cursor-pointer transition-colors"
             data-testid={`room-${r.id}`}>
-            <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
               {r.querent_name?.charAt(0) ?? "?"}
               {(r.unread_count ?? 0) > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center" data-testid={`badge-unread-room-${r.id}`}>
@@ -273,11 +273,11 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold truncate">{r.querent_name}</div>
-              {r.last_message && <div className="text-xs text-white/50 truncate">{r.last_message}</div>}
+              <div className="text-sm font-semibold truncate text-gray-900">{r.querent_name}</div>
+              {r.last_message && <div className="text-xs text-gray-500 truncate">{r.last_message}</div>}
             </div>
             {r.last_at && (
-              <div className="text-[10px] text-white/30 flex-shrink-0">
+              <div className="text-[10px] text-gray-400 flex-shrink-0">
                 {new Date(r.last_at).toLocaleDateString("ja-JP", { month: "short", day: "numeric" })}
               </div>
             )}
@@ -309,6 +309,12 @@ function ProfileSettings() {
   const [longIntro, setLongIntro] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [bannerError, setBannerError] = useState("");
+  const [iconError, setIconError] = useState("");
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) {
@@ -331,6 +337,60 @@ function ProfileSettings() {
     );
   }
 
+  async function uploadImage(file: File, type: "icon" | "banner") {
+    const setUploading = type === "icon" ? setUploadingIcon : setUploadingBanner;
+    const setError = type === "icon" ? setIconError : setBannerError;
+    const setImage = type === "icon" ? setIconImage : setProfileImage;
+    setError("");
+
+    const maxSize = type === "icon" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError(type === "icon" ? "2MB以下の画像を選択してください" : "5MB以下の画像を選択してください");
+      return;
+    }
+
+    const img = document.createElement("img");
+    const objectUrl = URL.createObjectURL(file);
+    img.src = objectUrl;
+    await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    URL.revokeObjectURL(objectUrl);
+
+    if (w === 0 || h === 0) {
+      setError("画像を読み込めませんでした");
+      return;
+    }
+
+    const ratio = w / h;
+    if (type === "icon" && (ratio < 0.9 || ratio > 1.1)) {
+      setError(`正方形（1:1）の画像を使用してください（現在: ${ratio.toFixed(2)}）`);
+      return;
+    }
+    if (type === "banner" && (ratio < 1.5 || ratio > 2.0)) {
+      setError(`横長（16:9〜2:1）の画像を使用してください（現在: ${ratio.toFixed(2)}）`);
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", type);
+      const resp = await fetch("/api/upload_image", { method: "POST", body: formData, credentials: "include" });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setError(data.error || "アップロードに失敗しました");
+        return;
+      }
+      setImage(data.url);
+    } catch (e: any) {
+      setError(e.message || "アップロードに失敗しました");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function save() {
     try {
       setSaving(true);
@@ -340,6 +400,7 @@ function ProfileSettings() {
         regular_holidays: regularHolidays, business_hours: businessHours, long_intro: longIntro,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/my_fortuneteller_profile"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/get_fortuneteller_all"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -351,52 +412,76 @@ function ProfileSettings() {
 
   return (
     <div className="p-4 space-y-4 pb-8">
-      <div className="text-sm font-bold text-white/80" data-testid="text-settings-title">プロフィール設定</div>
+      <div className="text-sm font-bold text-gray-800" data-testid="text-settings-title">プロフィール設定</div>
+      <div className="space-y-2">
+        <span className="text-gray-600 text-sm flex items-center gap-1.5"><Image className="w-3.5 h-3.5" />バナー画像</span>
+        <div className="text-[10px] text-gray-400">推奨: 横長（16:9〜2:1）/ 最大5MB / JPEG, PNG, WebP</div>
+        {profileImage && <img src={profileImage} alt="" className="w-full h-24 object-cover rounded-xl border border-pink-200" data-testid="img-profile-banner-preview" />}
+        <input type="file" ref={bannerInputRef} accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); e.target.value = ""; }} />
+        <button type="button" onClick={() => bannerInputRef.current?.click()} disabled={uploadingBanner}
+          data-testid="button-upload-banner"
+          className="w-full py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs flex items-center justify-center gap-1.5 hover:bg-pink-100 transition-colors disabled:opacity-50">
+          <Upload className="w-3.5 h-3.5" />
+          {uploadingBanner ? "アップロード中..." : "バナー画像を選択"}
+        </button>
+        {bannerError && (
+          <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 flex items-start gap-1.5" data-testid="text-banner-error">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{bannerError}
+          </div>
+        )}
+      </div>
+      <div className="space-y-2">
+        <span className="text-gray-600 text-sm flex items-center gap-1.5"><UserCircle className="w-3.5 h-3.5" />アイコン画像</span>
+        <div className="text-[10px] text-gray-400">推奨: 正方形（1:1）/ 最大2MB / JPEG, PNG, WebP</div>
+        {iconImage && <img src={iconImage} alt="" className="w-14 h-14 object-cover rounded-full border border-pink-200" data-testid="img-profile-icon-preview" />}
+        <input type="file" ref={iconInputRef} accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "icon"); e.target.value = ""; }} />
+        <button type="button" onClick={() => iconInputRef.current?.click()} disabled={uploadingIcon}
+          data-testid="button-upload-icon"
+          className="w-full py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs flex items-center justify-center gap-1.5 hover:bg-pink-100 transition-colors disabled:opacity-50">
+          <Upload className="w-3.5 h-3.5" />
+          {uploadingIcon ? "アップロード中..." : "アイコン画像を選択"}
+        </button>
+        {iconError && (
+          <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 flex items-start gap-1.5" data-testid="text-icon-error">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{iconError}
+          </div>
+        )}
+      </div>
       <label className="block text-sm">
-        <span className="text-white/60 flex items-center gap-1.5"><Image className="w-3.5 h-3.5" />バナー画像URL</span>
-        <input value={profileImage} onChange={(e) => setProfileImage(e.target.value)} placeholder="https://example.com/banner.jpg" data-testid="input-profile-banner"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
-        {profileImage && <img src={profileImage} alt="" className="mt-2 w-full h-24 object-cover rounded-xl border border-white/10" data-testid="img-profile-banner-preview" />}
-      </label>
-      <label className="block text-sm">
-        <span className="text-white/60 flex items-center gap-1.5"><UserCircle className="w-3.5 h-3.5" />アイコン画像URL</span>
-        <input value={iconImage} onChange={(e) => setIconImage(e.target.value)} placeholder="https://example.com/icon.jpg" data-testid="input-profile-icon"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
-        {iconImage && <img src={iconImage} alt="" className="mt-2 w-14 h-14 object-cover rounded-full border border-white/10" data-testid="img-profile-icon-preview" />}
-      </label>
-      <label className="block text-sm">
-        <span className="text-white/60">占い師名</span>
+        <span className="text-gray-600">占い師名</span>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} data-testid="input-profile-name"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
       </label>
       <label className="block text-sm">
-        <span className="text-white/60">キャッチコピー</span>
+        <span className="text-gray-600">キャッチコピー</span>
         <input value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={30} data-testid="input-profile-headline"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
       </label>
       <label className="block text-sm">
-        <span className="text-white/60">自己紹介（短文）</span>
+        <span className="text-gray-600">自己紹介（短文）</span>
         <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={3} data-testid="textarea-profile-intro"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-none" />
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-none" />
       </label>
       <label className="block text-sm">
-        <span className="text-white/60">紹介文（詳細ページ用・10,000文字以内）</span>
+        <span className="text-gray-600">紹介文（詳細ページ用・10,000文字以内）</span>
         <textarea value={longIntro} onChange={(e) => { if (e.target.value.length <= 10000) setLongIntro(e.target.value); }} rows={8} data-testid="textarea-profile-long-intro"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-y" />
-        <span className="text-[11px] text-white/40 mt-1 block">{longIntro.length.toLocaleString()} / 10,000文字</span>
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-y" />
+        <span className="text-[11px] text-gray-400 mt-1 block">{longIntro.length.toLocaleString()} / 10,000文字</span>
       </label>
       <label className="block text-sm">
-        <span className="text-white/60 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />営業時間</span>
+        <span className="text-gray-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />営業時間</span>
         <input value={businessHours} onChange={(e) => setBusinessHours(e.target.value)} maxLength={100} placeholder="例: 10:00〜22:00" data-testid="input-profile-hours"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
       </label>
       <label className="block text-sm">
-        <span className="text-white/60 flex items-center gap-1.5"><CalendarOff className="w-3.5 h-3.5" />定休日</span>
+        <span className="text-gray-600 flex items-center gap-1.5"><CalendarOff className="w-3.5 h-3.5" />定休日</span>
         <input value={regularHolidays} onChange={(e) => setRegularHolidays(e.target.value)} maxLength={100} placeholder="例: 毎週水曜日" data-testid="input-profile-holidays"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
       </label>
       <div className="space-y-1.5">
-        <span className="text-white/60 text-xs">スタイル</span>
+        <span className="text-gray-600 text-xs">スタイル</span>
         <div className="flex flex-wrap gap-2">
           {STYLE_OPTIONS.map((s) => (
             <button
@@ -406,8 +491,8 @@ function ProfileSettings() {
               data-testid={`button-style-${s}`}
               className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
                 style === s
-                  ? "bg-purple-600 border-purple-500 text-white"
-                  : "bg-white/5 border-white/15 text-white/60 hover:text-white/80"
+                  ? "bg-purple-100 border-purple-300 text-purple-700"
+                  : "bg-pink-50 border-pink-200 text-gray-600 hover:text-gray-800"
               }`}
             >
               {s}
@@ -416,7 +501,7 @@ function ProfileSettings() {
         </div>
       </div>
       <div className="space-y-1.5">
-        <span className="text-white/60 text-xs">占術（複数選択可）</span>
+        <span className="text-gray-600 text-xs">占術（複数選択可）</span>
         <div className="flex flex-wrap gap-2">
           {METHOD_OPTIONS.map((m) => (
             <button
@@ -426,8 +511,8 @@ function ProfileSettings() {
               data-testid={`button-method-${m}`}
               className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
                 divinationMethods.includes(m)
-                  ? "bg-cyan-600 border-cyan-500 text-white"
-                  : "bg-white/5 border-white/15 text-white/60 hover:text-white/80"
+                  ? "bg-cyan-100 border-cyan-300 text-cyan-700"
+                  : "bg-pink-50 border-pink-200 text-gray-600 hover:text-gray-800"
               }`}
             >
               {m}
@@ -436,7 +521,7 @@ function ProfileSettings() {
         </div>
       </div>
       <button onClick={save} disabled={saving} data-testid="button-save-profile"
-        className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50">
+        className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50">
         {saving ? "保存中..." : saved ? "保存しました" : "保存する"}
       </button>
     </div>
@@ -505,24 +590,24 @@ function QuerentListView() {
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-white/50 text-sm">読み込み中...</div>
+        <div className="text-gray-400 text-sm">読み込み中...</div>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-3 pb-2 space-y-2 border-b border-white/10">
+      <div className="px-4 pt-3 pb-2 space-y-2 border-b border-pink-200">
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="名前・お悩みで検索..."
               data-testid="input-querent-search"
-              className="w-full rounded-xl bg-white/10 border border-white/20 pl-9 pr-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none"
+              className="w-full rounded-xl bg-pink-50 border border-pink-200 pl-9 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none"
             />
           </div>
         </div>
@@ -534,14 +619,14 @@ function QuerentListView() {
               data-testid={`filter-${c.value}`}
               className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
                 filterCategory === c.value
-                  ? "bg-fuchsia-600 border-fuchsia-500 text-white"
-                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+                  ? "bg-pink-600 border-pink-500 text-white"
+                  : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
               }`}
             >
               {c.label}
             </button>
           ))}
-          <span className="w-px h-4 bg-white/20 mx-1 flex-shrink-0" />
+          <span className="w-px h-4 bg-pink-200 mx-1 flex-shrink-0" />
           {[{ value: "all", label: "全員" }, { value: "subscribed", label: "サブスク会員" }].map((s) => (
             <button
               key={s.value}
@@ -550,16 +635,16 @@ function QuerentListView() {
               className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
                 filterSubscription === s.value
                   ? "bg-amber-600 border-amber-500 text-white"
-                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+                  : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
               }`}
             >
               {s.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center justify-between text-xs text-white/50">
-          <button onClick={toggleSelectAll} className="flex items-center gap-1 hover:text-white/80 transition-colors" data-testid="button-select-all">
-            {selected.size === filtered.length && filtered.length > 0 ? <CheckSquare className="w-4 h-4 text-fuchsia-400" /> : <Square className="w-4 h-4" />}
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <button onClick={toggleSelectAll} className="flex items-center gap-1 hover:text-gray-700 transition-colors" data-testid="button-select-all">
+            {selected.size === filtered.length && filtered.length > 0 ? <CheckSquare className="w-4 h-4 text-pink-600" /> : <Square className="w-4 h-4" />}
             <span>{selected.size === filtered.length && filtered.length > 0 ? "全解除" : "全選択"}</span>
           </button>
           <span data-testid="text-selected-count">{selected.size}名選択中 / {filtered.length}名</span>
@@ -568,8 +653,8 @@ function QuerentListView() {
 
       <div className="flex-1 overflow-y-auto no-scrollbar" data-testid="container-querent-list">
         {filtered.length === 0 ? (
-          <div className="text-center text-white/40 text-sm pt-12">
-            <Users className="w-8 h-8 mx-auto mb-3 text-fuchsia-400/50" />
+          <div className="text-center text-gray-400 text-sm pt-12">
+            <Users className="w-8 h-8 mx-auto mb-3 text-pink-300" />
             <p>該当する相談者がいません</p>
           </div>
         ) : (
@@ -577,38 +662,38 @@ function QuerentListView() {
             <div
               key={q.user_id}
               onClick={() => toggleSelect(q.user_id)}
-              className={`flex items-start gap-3 px-4 py-3 border-b border-white/5 cursor-pointer transition-colors ${
-                selected.has(q.user_id) ? "bg-fuchsia-900/20" : "hover:bg-white/5"
+              className={`flex items-start gap-3 px-4 py-3 border-b border-pink-100 cursor-pointer transition-colors ${
+                selected.has(q.user_id) ? "bg-pink-50" : "hover:bg-pink-50/50"
               }`}
               data-testid={`querent-row-${q.user_id}`}
             >
               <div className="pt-0.5">
                 {selected.has(q.user_id) ? (
-                  <CheckSquare className="w-5 h-5 text-fuchsia-400" />
+                  <CheckSquare className="w-5 h-5 text-pink-600" />
                 ) : (
-                  <Square className="w-5 h-5 text-white/30" />
+                  <Square className="w-5 h-5 text-gray-300" />
                 )}
               </div>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
                 {q.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold" data-testid={`text-querent-name-${q.user_id}`}>{q.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/60">{q.zodiac_sign}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">
+                  <span className="text-sm font-semibold text-gray-900" data-testid={`text-querent-name-${q.user_id}`}>{q.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600">{q.zodiac_sign}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-800">
                     {worryCategoryLabel[q.worry_category] || q.worry_category}
                   </span>
                   {q.is_subscription && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200" data-testid={`badge-sub-${q.user_id}`}>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800" data-testid={`badge-sub-${q.user_id}`}>
                       サブスク
                     </span>
                   )}
                 </div>
                 {q.worry_message && (
-                  <div className="text-xs text-white/50 mt-0.5 truncate" data-testid={`text-querent-worry-${q.user_id}`}>{q.worry_message}</div>
+                  <div className="text-xs text-gray-500 mt-0.5 truncate" data-testid={`text-querent-worry-${q.user_id}`}>{q.worry_message}</div>
                 )}
-                <div className="text-[10px] text-white/30 mt-0.5">
+                <div className="text-[10px] text-gray-400 mt-0.5">
                   生年月日: {q.birthdate} / {q.points}pt
                 </div>
               </div>
@@ -618,15 +703,15 @@ function QuerentListView() {
       </div>
 
       {(selected.size > 0 || sent) && (
-        <div className="border-t border-white/10 bg-[#0d1a33] p-3 space-y-2">
+        <div className="border-t border-pink-200 bg-white p-3 space-y-2">
           {sent && (
-            <div className="text-xs text-green-300 bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2" data-testid="text-sent-success">
+            <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2" data-testid="text-sent-success">
               メッセージを送信しました
             </div>
           )}
           {selected.size > 0 && (
             <>
-              <div className="flex items-center gap-1 text-xs text-white/50">
+              <div className="flex items-center gap-1 text-xs text-gray-500">
                 <span>{selected.size}名に送信</span>
                 <span className="ml-auto">{messageText.length}/150</span>
               </div>
@@ -637,13 +722,13 @@ function QuerentListView() {
                   onChange={(e) => { if (e.target.value.length <= 150) setMessageText(e.target.value); }}
                   placeholder="メッセージを入力（150文字以内）..."
                   data-testid="input-bulk-message"
-                  className="flex-1 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none"
+                  className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none"
                 />
                 <button
                   onClick={handleSend}
                   disabled={sending || !messageText.trim()}
                   data-testid="button-send-bulk"
-                  className="w-9 h-9 rounded-full bg-fuchsia-600 hover:bg-fuchsia-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                  className="w-9 h-9 rounded-full bg-pink-600 hover:bg-pink-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
                   <Send className="w-4 h-4 text-white" />
                 </button>
@@ -680,7 +765,7 @@ function BankSettings() {
 
   return (
     <div className="p-4 space-y-4 pb-8">
-      <div className="text-sm font-bold text-white/80" data-testid="text-bank-title">振込先口座設定</div>
+      <div className="text-sm font-bold text-gray-800" data-testid="text-bank-title">振込先口座設定</div>
       {[
         { label: "銀行名", key: "name" as const },
         { label: "支店名", key: "branch_name" as const },
@@ -688,23 +773,23 @@ function BankSettings() {
         { label: "口座名義", key: "account_holder_name" as const },
       ].map(({ label, key }) => (
         <label key={key} className="block text-sm">
-          <span className="text-white/60">{label}</span>
+          <span className="text-gray-600">{label}</span>
           <input value={fields[key]} onChange={(e) => setFields((p) => ({ ...p, [key]: e.target.value }))}
             data-testid={`input-bank-${key}`}
-            className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+            className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
         </label>
       ))}
       <label className="block text-sm">
-        <span className="text-white/60">口座種別</span>
+        <span className="text-gray-600">口座種別</span>
         <select value={fields.account_type} onChange={(e) => setFields((p) => ({ ...p, account_type: e.target.value }))}
           data-testid="select-bank-type"
-          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none">
-          <option value="普通" className="bg-gray-800">普通</option>
-          <option value="当座" className="bg-gray-800">当座</option>
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+          <option value="普通">普通</option>
+          <option value="当座">当座</option>
         </select>
       </label>
       <button onClick={save} disabled={saving} data-testid="button-save-bank"
-        className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50">
+        className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50">
         {saving ? "保存中..." : saved ? "保存しました" : "保存する"}
       </button>
     </div>
@@ -747,22 +832,22 @@ export default function AdvisorApp() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0c1a33] flex items-center justify-center">
-        <div className="text-white/50 text-sm">読み込み中...</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-gray-400 text-sm">読み込み中...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#0c1a33] text-white">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0d1a33]">
-        <div className="text-sm font-bold" data-testid="text-advisor-app-title">
-          <Sparkles className="w-4 h-4 inline-block mr-1 text-fuchsia-400" />
+    <div className="h-screen flex flex-col bg-white text-gray-900">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-pink-200 bg-white">
+        <div className="text-sm font-bold text-gray-900" data-testid="text-advisor-app-title">
+          <Sparkles className="w-4 h-4 inline-block mr-1 text-pink-600" />
           占い師管理
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-white/50 hidden sm:inline" data-testid="text-ft-email">{user?.email}</span>
-          <button onClick={handleLogout} className="text-xs text-white/50 hover:text-white" data-testid="button-ft-logout">
+          <span className="text-xs text-gray-500 hidden sm:inline" data-testid="text-ft-email">{user?.email}</span>
+          <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-gray-800" data-testid="button-ft-logout">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
@@ -782,7 +867,7 @@ export default function AdvisorApp() {
         )}
       </div>
 
-      <nav className="flex border-t border-white/10 bg-[#0d1a33]">
+      <nav className="flex border-t border-pink-200 bg-white">
         {([
           { key: "chat" as const, icon: MessageCircle, label: "チャット" },
           { key: "querents" as const, icon: Users, label: "相談者一覧" },
@@ -792,7 +877,7 @@ export default function AdvisorApp() {
           <button key={key} onClick={() => { setTab(key); setSelectedRoom(null); }}
             data-testid={`tab-${key}`}
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] transition-colors ${
-              tab === key ? "text-fuchsia-400" : "text-white/40 hover:text-white/60"
+              tab === key ? "text-pink-600" : "text-gray-400 hover:text-gray-600"
             }`}>
             <div className="relative">
               <Icon className="w-5 h-5" />
