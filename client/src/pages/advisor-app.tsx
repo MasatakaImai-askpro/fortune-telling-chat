@@ -522,7 +522,7 @@ function QuerentListView() {
             </button>
           ))}
           <span className="w-px h-4 bg-white/20 mx-1 flex-shrink-0" />
-          {[{ value: "all", label: "全員" }, { value: "subscribed", label: "サブスク会員" }, { value: "free", label: "無料会員" }].map((s) => (
+          {[{ value: "all", label: "全員" }, { value: "subscribed", label: "サブスク会員" }].map((s) => (
             <button
               key={s.value}
               onClick={() => setFilterSubscription(s.value)}

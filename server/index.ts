@@ -239,6 +239,43 @@ wss.on("connection", async (ws, req) => {
   });
 });
 
+async function seedAdminAndSubscriptions() {
+  try {
+    const hashedPassword = await bcrypt.hash("Test1234", 10);
+
+    const existingAdmin = await storage.getUserByEmail("admin@example.com");
+    if (!existingAdmin) {
+      const adminUser = await storage.createUser({ email: "admin@example.com", password: hashedPassword, role: "9" });
+      log(`Admin user created: admin@example.com (id=${adminUser.id})`);
+    }
+
+    const now = new Date();
+    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    let subCount = 0;
+    for (let i = 0; i < 10; i++) {
+      const idx = String(i + 1).padStart(2, "0");
+      const qUser = await storage.getUserByEmail(`querent${idx}@example.com`);
+      if (qUser) {
+        const alreadySub = await storage.getActiveSubscription(qUser.id);
+        if (!alreadySub) {
+          await storage.createSubscription({
+            querentId: qUser.id,
+            amount: 20000,
+            status: "active",
+            startDate: now,
+            endDate: thirtyDaysLater,
+          });
+          await storage.updateQuerentProfile(qUser.id, { isSubscription: true });
+          subCount++;
+        }
+      }
+    }
+    if (subCount > 0) log(`Subscriptions seeded for ${subCount} querents.`);
+  } catch (e: any) {
+    log(`Admin/subscription seed: ${e.message}`);
+  }
+}
+
 async function seedDatabase() {
   try {
     const existing = await storage.getUserByEmail("querent01@example.com");
@@ -364,32 +401,7 @@ async function seedDatabase() {
       });
     }
 
-    const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    for (let i = 0; i < 10; i++) {
-      const idx = String(i + 1).padStart(2, "0");
-      const qUser = await storage.getUserByEmail(`querent${idx}@example.com`);
-      if (qUser) {
-        await storage.createSubscription({
-          querentId: qUser.id,
-          amount: 20000,
-          status: "active",
-          startDate: now,
-          endDate: thirtyDaysLater,
-        });
-        await storage.updateQuerentProfile(qUser.id, { isSubscription: true });
-      }
-    }
-
-    const existingAdmin = await storage.getUserByEmail("admin@example.com");
-    if (!existingAdmin) {
-      const adminUser = await storage.createUser({ email: "admin@example.com", password: hashedPassword, role: "9" });
-      log(`Admin user created: admin@example.com (id=${adminUser.id})`);
-    } else {
-      log(`Admin user already exists: admin@example.com`);
-    }
-
-    log("Database seeded with 30 fortunetellers, 30 querents, 10 subscriptions, and 1 admin.");
+    log("Database seeded with 30 fortunetellers and 30 querents.");
   } catch (e: any) {
     log(`Seed skipped or failed: ${e.message}`);
   }
@@ -421,6 +433,7 @@ async function backfillStylesAndMethods() {
 
 (async () => {
   await seedDatabase();
+  await seedAdminAndSubscriptions();
   await backfillStylesAndMethods();
 
   if (app.get("env") === "development") {
