@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Send, ChevronLeft, Sparkles, LogOut, Home as HomeIcon, Users, MessageCircle, Settings, Star, Paperclip, X } from "lucide-react";
+import { Search, Send, ChevronLeft, Sparkles, LogOut, Home as HomeIcon, Users, MessageCircle, Settings, Star, Paperclip, X, Clock, CalendarOff } from "lucide-react";
 
 const API_BASE = "";
 const YEN_PER_POINT = 1.5;
@@ -60,6 +60,9 @@ type Advisor = {
   is_recommended: boolean;
   style: string;
   divination_methods: string[];
+  regular_holidays: string;
+  business_hours: string;
+  long_intro: string;
   tags: string[];
 };
 
@@ -282,18 +285,22 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
       ))}
       {detailId && adv(detailId) && (
         <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={() => setDetailId(null)}>
-          <div className="w-full max-w-md bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            {adv(detailId)!.profile_image && <img src={adv(detailId)!.profile_image} className="w-full h-32 object-cover" alt="" />}
+          <div className="w-full max-w-md bg-[#0d1a33] border border-white/10 rounded-2xl overflow-hidden max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {adv(detailId)!.profile_image ? (
+              <img src={adv(detailId)!.profile_image} className="w-full h-40 object-cover" alt="" data-testid="img-detail-banner" />
+            ) : (
+              <div className="w-full h-28 bg-gradient-to-br from-fuchsia-800/60 to-purple-900/60" data-testid="img-detail-banner-placeholder" />
+            )}
             <div className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center font-bold flex-shrink-0">
-                  {adv(detailId)!.icon_image ? <img src={adv(detailId)!.icon_image} alt="" className="w-full h-full rounded-full object-cover ring-2 ring-white/20" /> : adv(detailId)!.name.charAt(0)}
+              <div className="flex items-center gap-3 -mt-10 relative z-10">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-xl font-bold flex-shrink-0 ring-3 ring-[#0d1a33]" data-testid="icon-detail-avatar">
+                  {adv(detailId)!.icon_image ? <img src={adv(detailId)!.icon_image} alt="" className="w-full h-full rounded-full object-cover" /> : adv(detailId)!.name.charAt(0)}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 pt-8">
                   <div className="font-semibold truncate flex items-center gap-2">{adv(detailId)!.name} <Ribbon rank={adv(detailId)!.rank} /></div>
                 </div>
               </div>
-              <h4 className="mt-3 font-semibold">{adv(detailId)!.headline}</h4>
+              <h4 className="mt-3 font-semibold text-fuchsia-300/90">{adv(detailId)!.headline}</h4>
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                 {adv(detailId)!.style && (
                   <span className="text-[11px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full" data-testid="badge-detail-style">{adv(detailId)!.style}</span>
@@ -302,7 +309,27 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
                   <span key={m} className="text-[11px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full" data-testid={`badge-detail-method-${m}`}>{m}</span>
                 ))}
               </div>
-              <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{truncate(adv(detailId)!.intro || "", 1000)}</p>
+              {(adv(detailId)!.business_hours || adv(detailId)!.regular_holidays) && (
+                <div className="mt-3 space-y-1.5 bg-white/5 rounded-xl p-3 border border-white/10">
+                  {adv(detailId)!.business_hours && (
+                    <div className="flex items-center gap-2 text-xs text-white/70" data-testid="text-detail-hours">
+                      <Clock className="w-3.5 h-3.5 text-fuchsia-400 flex-shrink-0" />
+                      <span>営業時間: {adv(detailId)!.business_hours}</span>
+                    </div>
+                  )}
+                  {adv(detailId)!.regular_holidays && (
+                    <div className="flex items-center gap-2 text-xs text-white/70" data-testid="text-detail-holidays">
+                      <CalendarOff className="w-3.5 h-3.5 text-fuchsia-400 flex-shrink-0" />
+                      <span>定休日: {adv(detailId)!.regular_holidays}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="mt-3">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap text-white/80" data-testid="text-detail-intro">
+                  {truncate(adv(detailId)!.long_intro || adv(detailId)!.intro || "", 10000)}
+                </p>
+              </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button className="rounded-xl py-2 text-xs font-semibold bg-white text-gray-900" data-testid="button-start-chat-detail"
                   onClick={() => { onStartChat(detailId); setDetailId(null); }}>この占い師に相談</button>

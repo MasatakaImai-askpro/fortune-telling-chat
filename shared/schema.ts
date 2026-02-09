@@ -21,6 +21,9 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
   isRecommended: boolean("is_recommended").notNull().default(false),
   style: varchar("style", { length: 20 }).notNull().default(""),
   divinationMethods: text("divination_methods").array().notNull().default([]),
+  regularHolidays: varchar("regular_holidays", { length: 100 }).notNull().default(""),
+  businessHours: varchar("business_hours", { length: 100 }).notNull().default(""),
+  longIntro: text("long_intro").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

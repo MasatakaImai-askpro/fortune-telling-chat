@@ -151,6 +151,9 @@ export function registerRoutes(app: Express) {
         is_recommended: profile.isRecommended,
         style: profile.style,
         divination_methods: profile.divinationMethods,
+        regular_holidays: profile.regularHolidays,
+        business_hours: profile.businessHours,
+        long_intro: profile.longIntro,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -159,13 +162,27 @@ export function registerRoutes(app: Express) {
 
   app.patch("/api/my_fortuneteller_profile", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { name, headline, intro, style, divination_methods } = req.body;
+      const { name, headline, intro, style, divination_methods, profile_image, icon_image, regular_holidays, business_hours, long_intro } = req.body;
+      if (long_intro !== undefined && typeof long_intro === "string" && long_intro.length > 10000) {
+        return res.status(400).json({ error: "紹介文は10,000文字以内にしてください" });
+      }
+      if (regular_holidays !== undefined && typeof regular_holidays === "string" && regular_holidays.length > 100) {
+        return res.status(400).json({ error: "定休日は100文字以内にしてください" });
+      }
+      if (business_hours !== undefined && typeof business_hours === "string" && business_hours.length > 100) {
+        return res.status(400).json({ error: "営業時間は100文字以内にしてください" });
+      }
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (headline !== undefined) updateData.headline = headline;
       if (intro !== undefined) updateData.intro = intro;
       if (style !== undefined) updateData.style = style;
       if (divination_methods !== undefined) updateData.divinationMethods = divination_methods;
+      if (profile_image !== undefined) updateData.profileImage = profile_image;
+      if (icon_image !== undefined) updateData.iconImage = icon_image;
+      if (regular_holidays !== undefined) updateData.regularHolidays = regular_holidays;
+      if (business_hours !== undefined) updateData.businessHours = business_hours;
+      if (long_intro !== undefined) updateData.longIntro = long_intro;
       const updated = await storage.updateFortunetellerProfile(req.session.userId!, updateData);
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });
@@ -414,6 +431,9 @@ export function registerRoutes(app: Express) {
         is_recommended: p.isRecommended,
         style: p.style,
         divination_methods: p.divinationMethods,
+        regular_holidays: p.regularHolidays,
+        business_hours: p.businessHours,
+        long_intro: p.longIntro,
         tags: [p.headline].filter(Boolean),
       }));
       res.json(list);

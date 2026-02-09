@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search } from "lucide-react";
+import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle } from "lucide-react";
 
 type Room = {
   id: string;
@@ -33,6 +33,9 @@ type Profile = {
   is_recommended: boolean;
   style: string;
   divination_methods: string[];
+  regular_holidays: string;
+  business_hours: string;
+  long_intro: string;
 };
 
 type BankInfo = {
@@ -222,6 +225,11 @@ function ProfileSettings() {
   const [intro, setIntro] = useState("");
   const [style, setStyle] = useState("");
   const [divinationMethods, setDivinationMethods] = useState<string[]>([]);
+  const [profileImage, setProfileImage] = useState("");
+  const [iconImage, setIconImage] = useState("");
+  const [regularHolidays, setRegularHolidays] = useState("");
+  const [businessHours, setBusinessHours] = useState("");
+  const [longIntro, setLongIntro] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -232,6 +240,11 @@ function ProfileSettings() {
       setIntro(profile.intro);
       setStyle(profile.style || "");
       setDivinationMethods(profile.divination_methods || []);
+      setProfileImage(profile.profile_image || "");
+      setIconImage(profile.icon_image || "");
+      setRegularHolidays(profile.regular_holidays || "");
+      setBusinessHours(profile.business_hours || "");
+      setLongIntro(profile.long_intro || "");
     }
   }, [profile]);
 
@@ -244,7 +257,11 @@ function ProfileSettings() {
   async function save() {
     try {
       setSaving(true);
-      await apiRequest("PATCH", "/api/my_fortuneteller_profile", { name, headline, intro, style, divination_methods: divinationMethods });
+      await apiRequest("PATCH", "/api/my_fortuneteller_profile", {
+        name, headline, intro, style, divination_methods: divinationMethods,
+        profile_image: profileImage, icon_image: iconImage,
+        regular_holidays: regularHolidays, business_hours: businessHours, long_intro: longIntro,
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/my_fortuneteller_profile"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -259,6 +276,18 @@ function ProfileSettings() {
     <div className="p-4 space-y-4 pb-8">
       <div className="text-sm font-bold text-white/80" data-testid="text-settings-title">プロフィール設定</div>
       <label className="block text-sm">
+        <span className="text-white/60 flex items-center gap-1.5"><Image className="w-3.5 h-3.5" />バナー画像URL</span>
+        <input value={profileImage} onChange={(e) => setProfileImage(e.target.value)} placeholder="https://example.com/banner.jpg" data-testid="input-profile-banner"
+          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+        {profileImage && <img src={profileImage} alt="" className="mt-2 w-full h-24 object-cover rounded-xl border border-white/10" data-testid="img-profile-banner-preview" />}
+      </label>
+      <label className="block text-sm">
+        <span className="text-white/60 flex items-center gap-1.5"><UserCircle className="w-3.5 h-3.5" />アイコン画像URL</span>
+        <input value={iconImage} onChange={(e) => setIconImage(e.target.value)} placeholder="https://example.com/icon.jpg" data-testid="input-profile-icon"
+          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+        {iconImage && <img src={iconImage} alt="" className="mt-2 w-14 h-14 object-cover rounded-full border border-white/10" data-testid="img-profile-icon-preview" />}
+      </label>
+      <label className="block text-sm">
         <span className="text-white/60">占い師名</span>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} data-testid="input-profile-name"
           className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
@@ -269,9 +298,25 @@ function ProfileSettings() {
           className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
       </label>
       <label className="block text-sm">
-        <span className="text-white/60">自己紹介</span>
-        <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={5} data-testid="textarea-profile-intro"
+        <span className="text-white/60">自己紹介（短文）</span>
+        <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={3} data-testid="textarea-profile-intro"
           className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-none" />
+      </label>
+      <label className="block text-sm">
+        <span className="text-white/60">紹介文（詳細ページ用・10,000文字以内）</span>
+        <textarea value={longIntro} onChange={(e) => { if (e.target.value.length <= 10000) setLongIntro(e.target.value); }} rows={8} data-testid="textarea-profile-long-intro"
+          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none resize-y" />
+        <span className="text-[11px] text-white/40 mt-1 block">{longIntro.length.toLocaleString()} / 10,000文字</span>
+      </label>
+      <label className="block text-sm">
+        <span className="text-white/60 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />営業時間</span>
+        <input value={businessHours} onChange={(e) => setBusinessHours(e.target.value)} maxLength={100} placeholder="例: 10:00〜22:00" data-testid="input-profile-hours"
+          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
+      </label>
+      <label className="block text-sm">
+        <span className="text-white/60 flex items-center gap-1.5"><CalendarOff className="w-3.5 h-3.5" />定休日</span>
+        <input value={regularHolidays} onChange={(e) => setRegularHolidays(e.target.value)} maxLength={100} placeholder="例: 毎週水曜日" data-testid="input-profile-holidays"
+          className="mt-1 w-full rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
       </label>
       <div className="space-y-1.5">
         <span className="text-white/60 text-xs">スタイル</span>
