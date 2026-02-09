@@ -9,6 +9,8 @@ import QuerentRegistration from "./pages/querent-registration";
 import FortunetellerRegistration from "./pages/fortuneteller-registration";
 import AdvisorApp from "./pages/advisor-app";
 import AdminApp from "./pages/admin-app";
+import PasswordResetRequest from "./pages/password-reset-request";
+import PasswordReset from "./pages/password-reset";
 
 function Router() {
   return (
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/registration/fortuneteller" component={FortunetellerRegistration} />
       <Route path="/fortuneteller_mypage" component={AdvisorApp} />
       <Route path="/admin" component={AdminApp} />
+      <Route path="/password_reset_request" component={PasswordResetRequest} />
+      <Route path="/password_reset" component={PasswordReset} />
       <Route>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center text-white/70">

@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { storage, computeRankFromRevenue, RANK_THRESHOLDS } from "./storage";
 import { z } from "zod";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) {
@@ -52,6 +53,50 @@ export function registerRoutes(app: Express) {
       res.clearCookie("connect.sid");
       res.json({ detail: "Successfully logged out." });
     });
+  });
+
+  app.post("/api/password_reset_request", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: "メールアドレスを入力してください" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.json({ message: "登録されているメールアドレスの場合、リセットリンクが発行されます。" });
+      }
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      await storage.createPasswordResetToken(user.id, token, expiresAt);
+      const isDev = process.env.NODE_ENV !== "production";
+      if (isDev) {
+        res.json({
+          message: "パスワードリセットリンクが発行されました。30分以内にリセットしてください。",
+          token,
+          reset_url: `/password_reset?token=${token}`,
+        });
+      } else {
+        res.json({ message: "登録されているメールアドレスの場合、リセットリンクが発行されます。" });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/password_reset", async (req: Request, res: Response) => {
+    try {
+      const { token, new_password } = req.body;
+      if (!token || !new_password) return res.status(400).json({ error: "トークンと新しいパスワードは必須です" });
+      if (new_password.length < 6) return res.status(400).json({ error: "パスワードは6文字以上で入力してください" });
+      const resetToken = await storage.getPasswordResetToken(token);
+      if (!resetToken) return res.status(400).json({ error: "無効なリセットトークンです" });
+      if (resetToken.usedAt) return res.status(400).json({ error: "このリセットリンクは既に使用されています" });
+      if (new Date() > resetToken.expiresAt) return res.status(400).json({ error: "リセットリンクの有効期限が切れています" });
+      const hashed = await bcrypt.hash(new_password, 10);
+      await storage.updateUserPassword(resetToken.userId, hashed);
+      await storage.markPasswordResetTokenUsed(token);
+      res.json({ message: "パスワードが正常にリセットされました。新しいパスワードでログインしてください。" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get("/api/get_login_info", async (req: Request, res: Response) => {

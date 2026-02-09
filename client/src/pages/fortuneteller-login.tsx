@@ -67,6 +67,12 @@ export default function FortunetellerLogin() {
             className="w-full py-2 rounded-xl bg-fuchsia-700 text-white font-semibold hover:bg-fuchsia-800 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed">
             {submitting ? "認証中..." : "ログイン"}
           </button>
+          <div className="text-center">
+            <button className="text-[11px] text-white/50 hover:text-white/70 underline underline-offset-2 transition-colors" data-testid="link-forgot-password"
+              onClick={() => setLocation("/password_reset_request")}>
+              パスワードをお忘れの方はこちら
+            </button>
+          </div>
           <div className="text-center text-[11px] text-white/60 leading-relaxed">
             まだ登録がお済みでない方は
             <button className="ml-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2" data-testid="link-register"
