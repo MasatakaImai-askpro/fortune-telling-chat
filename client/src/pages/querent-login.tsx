@@ -15,7 +15,12 @@ export default function QuerentLogin() {
     try {
       setSubmitting(true);
       setError(null);
-      await apiRequest("POST", "/api/user_login", { email, password, role: "1" });
+      const resp = await apiRequest("POST", "/api/user_login", { email, password, role: "1" });
+      const data = await resp.json();
+      if (data.user_role === "9") {
+        window.location.href = "/admin";
+        return;
+      }
       await refreshUser();
       setLocation("/");
     } catch (e: any) {

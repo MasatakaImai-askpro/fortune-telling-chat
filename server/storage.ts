@@ -1,7 +1,8 @@
 import { db } from "./db";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { lte } from "drizzle-orm";
 import {
-  users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions,
+  users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions, transferRequests,
   type User, type InsertUser,
   type FortunetellerProfile, type InsertFortunetellerProfile,
   type QuerentProfile, type InsertQuerentProfile,
@@ -9,6 +10,7 @@ import {
   type Room, type InsertRoom,
   type Message, type InsertMessage,
   type Subscription, type InsertSubscription,
+  type TransferRequest, type InsertTransferRequest,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -44,8 +46,18 @@ export interface IStorage {
   deductPoints(userId: number, amount: number): Promise<boolean>;
 
   getActiveSubscription(querentId: number): Promise<Subscription | undefined>;
+  getAllSubscriptions(): Promise<Subscription[]>;
   createSubscription(sub: InsertSubscription): Promise<Subscription>;
   cancelSubscription(querentId: number): Promise<void>;
+
+  getAllTransferRequests(): Promise<TransferRequest[]>;
+  createTransferRequest(req: InsertTransferRequest): Promise<TransferRequest>;
+  approveTransferRequest(id: number, scheduledDate: Date): Promise<TransferRequest | undefined>;
+  markTransferredRequests(): Promise<number>;
+
+  getAllUsers(): Promise<User[]>;
+  deleteUser(id: number): Promise<void>;
+  updateUser(id: number, data: Partial<{ email: string; role: string }>): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -196,6 +208,49 @@ export class DatabaseStorage implements IStorage {
     await db.update(querentProfiles)
       .set({ isSubscription: false })
       .where(eq(querentProfiles.userId, querentId));
+  }
+
+  async getAllSubscriptions(): Promise<Subscription[]> {
+    return db.select().from(subscriptions).orderBy(desc(subscriptions.createdAt));
+  }
+
+  async getAllTransferRequests(): Promise<TransferRequest[]> {
+    return db.select().from(transferRequests).orderBy(desc(transferRequests.requestedAt));
+  }
+
+  async createTransferRequest(req: InsertTransferRequest): Promise<TransferRequest> {
+    const [created] = await db.insert(transferRequests).values(req).returning();
+    return created;
+  }
+
+  async approveTransferRequest(id: number, scheduledDate: Date): Promise<TransferRequest | undefined> {
+    const [updated] = await db.update(transferRequests)
+      .set({ status: "approved", approvedAt: new Date(), scheduledTransferDate: scheduledDate })
+      .where(and(eq(transferRequests.id, id), eq(transferRequests.status, "pending")))
+      .returning();
+    return updated;
+  }
+
+  async markTransferredRequests(): Promise<number> {
+    const now = new Date();
+    const result = await db.update(transferRequests)
+      .set({ status: "transferred", transferredAt: now })
+      .where(and(eq(transferRequests.status, "approved"), lte(transferRequests.scheduledTransferDate, now)))
+      .returning();
+    return result.length;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users).orderBy(users.id);
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async updateUser(id: number, data: Partial<{ email: string; role: string }>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return updated;
   }
 }
 

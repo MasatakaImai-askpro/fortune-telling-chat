@@ -10,6 +10,17 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: "認証が必要です" });
+  }
+  const user = await storage.getUser(req.session.userId);
+  if (!user || user.role !== "9") {
+    return res.status(403).json({ error: "管理者権限が必要です" });
+  }
+  next();
+}
+
 export function registerRoutes(app: Express) {
   app.post("/api/user_login", async (req: Request, res: Response) => {
     try {
@@ -25,7 +36,7 @@ export function registerRoutes(app: Express) {
       if (!valid) {
         return res.status(401).json({ error: "認証に失敗しました" });
       }
-      if (role && user.role !== role) {
+      if (role && user.role !== role && user.role !== "9") {
         return res.status(401).json({ error: "ログイン画面が異なります。" });
       }
       req.session.userId = user.id;
@@ -380,6 +391,7 @@ export function registerRoutes(app: Express) {
         worry_message: p.worryMessage,
         birthdate: p.birthdate,
         points: p.points,
+        is_subscription: p.isSubscription,
       }));
       res.json(list);
     } catch (e: any) {
@@ -552,6 +564,194 @@ export function registerRoutes(app: Express) {
 
       await storage.cancelSubscription(user.id);
       res.json({ message: "サブスクリプションを解約しました" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ---- Admin API Routes ----
+
+  app.get("/api/admin/ranking", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const profiles = await storage.getAllFortunetellerProfiles();
+      const sorted = profiles
+        .sort((a, b) => {
+          const rankOrder: Record<string, number> = { PLATINUM: 3, GOLD: 2, SILVER: 1 };
+          return (rankOrder[b.rank] || 0) - (rankOrder[a.rank] || 0);
+        })
+        .slice(0, 10)
+        .map((p, i) => ({
+          rank_position: i + 1,
+          user_id: p.userId,
+          name: p.name,
+          headline: p.headline,
+          rank: p.rank,
+          is_recommended: p.isRecommended,
+          style: p.style,
+        }));
+      res.json(sorted);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const adminRankingSchema = z.object({
+    is_recommended: z.boolean().optional(),
+    rank: z.enum(["SILVER", "GOLD", "PLATINUM"]).optional(),
+  });
+
+  app.patch("/api/admin/ranking/:userId", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.userId as string);
+      const parsed = adminRankingSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "入力が不正です" });
+      const data: any = {};
+      if (parsed.data.is_recommended !== undefined) data.isRecommended = parsed.data.is_recommended;
+      if (parsed.data.rank) data.rank = parsed.data.rank;
+      const updated = await storage.updateFortunetellerProfile(userId, data);
+      if (!updated) return res.status(404).json({ error: "占い師が見つかりません" });
+      res.json({ message: "更新しました", profile: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/transfer_requests", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      await storage.markTransferredRequests();
+      const requests = await storage.getAllTransferRequests();
+      const profiles = await storage.getAllFortunetellerProfiles();
+      const profileMap = new Map(profiles.map((p) => [p.userId, p]));
+      const list = requests.map((r) => ({
+        id: r.id,
+        fortuneteller_id: r.fortunetellerId,
+        fortuneteller_name: profileMap.get(r.fortunetellerId)?.name || "不明",
+        amount: r.amount,
+        status: r.status,
+        requested_at: r.requestedAt.toISOString(),
+        approved_at: r.approvedAt?.toISOString() || null,
+        scheduled_transfer_date: r.scheduledTransferDate?.toISOString() || null,
+        transferred_at: r.transferredAt?.toISOString() || null,
+      }));
+      res.json(list);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const adminApproveSchema = z.object({
+    scheduled_transfer_date: z.string().refine((v) => !isNaN(new Date(v).getTime()), { message: "日付形式が不正です" }),
+  });
+
+  app.post("/api/admin/transfer_requests/:id/approve", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const parsed = adminApproveSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0]?.message || "入力が不正です" });
+      const scheduledDate = new Date(parsed.data.scheduled_transfer_date);
+      const updated = await storage.approveTransferRequest(id, scheduledDate);
+      if (!updated) return res.status(404).json({ error: "申請が見つからないか既に処理済みです" });
+      res.json({ message: "承認しました", request: updated });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/users", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const ftProfiles = await storage.getAllFortunetellerProfiles();
+      const qProfiles = await storage.getAllQuerentProfiles();
+      const ftMap = new Map(ftProfiles.map((p) => [p.userId, p]));
+      const qMap = new Map(qProfiles.map((p) => [p.userId, p]));
+
+      const list = allUsers.map((u) => {
+        const ft = ftMap.get(u.id);
+        const q = qMap.get(u.id);
+        return {
+          id: u.id,
+          email: u.email,
+          role: u.role,
+          role_label: u.role === "1" ? "相談者" : u.role === "2" ? "占い師" : u.role === "9" ? "管理者" : "不明",
+          created_at: u.createdAt.toISOString(),
+          profile_name: ft?.name || q?.name || null,
+          rank: ft?.rank || null,
+          points: q?.points ?? null,
+          is_subscription: q?.isSubscription ?? null,
+        };
+      });
+      res.json(list);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  const adminUserUpdateSchema = z.object({
+    email: z.string().email().optional(),
+    profile_name: z.string().max(100).optional(),
+    rank: z.enum(["SILVER", "GOLD", "PLATINUM"]).optional(),
+    points: z.number().int().min(0).optional(),
+    is_subscription: z.boolean().optional(),
+  });
+
+  app.patch("/api/admin/users/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const user = await storage.getUser(id);
+      if (!user) return res.status(404).json({ error: "ユーザーが見つかりません" });
+
+      const parsed = adminUserUpdateSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "入力が不正です" });
+      const { email, profile_name, rank, points, is_subscription } = parsed.data;
+      if (email) await storage.updateUser(id, { email });
+
+      if (user.role === "2") {
+        const data: any = {};
+        if (profile_name) data.name = profile_name;
+        if (rank && ["SILVER", "GOLD", "PLATINUM"].includes(rank)) data.rank = rank;
+        if (Object.keys(data).length > 0) await storage.updateFortunetellerProfile(id, data);
+      }
+
+      if (user.role === "1") {
+        const data: any = {};
+        if (profile_name) data.name = profile_name;
+        if (typeof points === "number") data.points = points;
+        if (typeof is_subscription === "boolean") data.isSubscription = is_subscription;
+        if (Object.keys(data).length > 0) await storage.updateQuerentProfile(id, data);
+      }
+
+      res.json({ message: "更新しました" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id as string);
+      const user = await storage.getUser(id);
+      if (!user) return res.status(404).json({ error: "ユーザーが見つかりません" });
+      if (user.role === "9") return res.status(400).json({ error: "管理者は削除できません" });
+      await storage.deleteUser(id);
+      res.json({ message: "退会処理が完了しました" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/admin/fortunetellers", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const profiles = await storage.getAllFortunetellerProfiles();
+      const list = profiles.map((p) => ({
+        user_id: p.userId,
+        name: p.name,
+        headline: p.headline,
+        rank: p.rank,
+        is_recommended: p.isRecommended,
+        style: p.style,
+        divination_methods: p.divinationMethods,
+      }));
+      res.json(list);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

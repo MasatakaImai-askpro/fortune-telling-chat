@@ -84,6 +84,17 @@ export const subscriptions = pgTable("subscriptions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const transferRequests = pgTable("transfer_requests", {
+  id: serial("id").primaryKey(),
+  fortunetellerId: integer("fortuneteller_id").notNull().references(() => fortunetellerProfiles.userId, { onDelete: "cascade" }),
+  amount: integer("amount").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  approvedAt: timestamp("approved_at"),
+  scheduledTransferDate: timestamp("scheduled_transfer_date"),
+  transferredAt: timestamp("transferred_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertFortunetellerProfileSchema = createInsertSchema(fortunetellerProfiles).omit({ createdAt: true });
 export const insertQuerentProfileSchema = createInsertSchema(querentProfiles).omit({ createdAt: true });
@@ -91,6 +102,7 @@ export const insertBankInfoSchema = createInsertSchema(bankInfo);
 export const insertRoomSchema = createInsertSchema(rooms).omit({ id: true, createdAt: true });
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
+export const insertTransferRequestSchema = createInsertSchema(transferRequests).omit({ id: true, requestedAt: true });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -106,3 +118,5 @@ export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type TransferRequest = typeof transferRequests.$inferSelect;
+export type InsertTransferRequest = z.infer<typeof insertTransferRequestSchema>;

@@ -57,6 +57,7 @@ type Querent = {
   worry_message: string;
   birthdate: string;
   points: number;
+  is_subscription: boolean;
 };
 
 const FULLWIDTH_REGEX = /^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3000-\u303F\uFF00-\uFF9F\u2000-\u206F\s\n\r、。！？「」『』（）・ー〜…―]+$/;
@@ -435,11 +436,13 @@ function QuerentListView() {
   const [sent, setSent] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterSubscription, setFilterSubscription] = useState<string>("all");
 
   const filtered = (querents ?? []).filter((q) => {
     const matchSearch = !searchTerm || q.name.includes(searchTerm) || q.worry_message.includes(searchTerm);
     const matchCategory = filterCategory === "all" || q.worry_category === filterCategory;
-    return matchSearch && matchCategory;
+    const matchSub = filterSubscription === "all" || (filterSubscription === "subscribed" ? q.is_subscription : !q.is_subscription);
+    return matchSearch && matchCategory && matchSub;
   });
 
   function toggleSelect(userId: number) {
@@ -518,6 +521,21 @@ function QuerentListView() {
               {c.label}
             </button>
           ))}
+          <span className="w-px h-4 bg-white/20 mx-1 flex-shrink-0" />
+          {[{ value: "all", label: "全員" }, { value: "subscribed", label: "サブスク会員" }, { value: "free", label: "無料会員" }].map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setFilterSubscription(s.value)}
+              data-testid={`filter-sub-${s.value}`}
+              className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
+                filterSubscription === s.value
+                  ? "bg-amber-600 border-amber-500 text-white"
+                  : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
         <div className="flex items-center justify-between text-xs text-white/50">
           <button onClick={toggleSelectAll} className="flex items-center gap-1 hover:text-white/80 transition-colors" data-testid="button-select-all">
@@ -561,6 +579,11 @@ function QuerentListView() {
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">
                     {worryCategoryLabel[q.worry_category] || q.worry_category}
                   </span>
+                  {q.is_subscription && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200" data-testid={`badge-sub-${q.user_id}`}>
+                      サブスク
+                    </span>
+                  )}
                 </div>
                 {q.worry_message && (
                   <div className="text-xs text-white/50 mt-0.5 truncate" data-testid={`text-querent-worry-${q.user_id}`}>{q.worry_message}</div>

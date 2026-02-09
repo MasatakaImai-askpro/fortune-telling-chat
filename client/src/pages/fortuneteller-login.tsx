@@ -15,7 +15,12 @@ export default function FortunetellerLogin() {
     try {
       setSubmitting(true);
       setError(null);
-      await apiRequest("POST", "/api/user_login", { email, password, role: "2" });
+      const resp = await apiRequest("POST", "/api/user_login", { email, password, role: "2" });
+      const data = await resp.json();
+      if (data.user_role === "9") {
+        window.location.href = "/admin";
+        return;
+      }
       await refreshUser();
       setLocation("/fortuneteller_mypage");
     } catch (e: any) {

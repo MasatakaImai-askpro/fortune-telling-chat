@@ -8,6 +8,7 @@ import FortunetellerLogin from "./pages/fortuneteller-login";
 import QuerentRegistration from "./pages/querent-registration";
 import FortunetellerRegistration from "./pages/fortuneteller-registration";
 import AdvisorApp from "./pages/advisor-app";
+import AdminApp from "./pages/admin-app";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/registration/querent" component={QuerentRegistration} />
       <Route path="/registration/fortuneteller" component={FortunetellerRegistration} />
       <Route path="/fortuneteller_mypage" component={AdvisorApp} />
+      <Route path="/admin" component={AdminApp} />
       <Route>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center text-white/70">
