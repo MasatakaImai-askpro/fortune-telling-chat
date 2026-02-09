@@ -112,3 +112,4 @@ client/
 - 2026-02-06: Added fortuneteller profile fields: style (6 options) and divination_methods (5 options, multi-select). Displayed on advisor listing cards and detail modal. Editable in fortuneteller profile settings.
 - 2026-02-09: Added backfill for style/divination_methods on server startup for production DB sync
 - 2026-02-09: Added fortuneteller profile fields: regular_holidays, business_hours, long_intro (10000 chars). Displayed on detail modal with icons. Editable in profile settings with banner/icon URL inputs.
+- 2026-02-09: Implemented treatment (施術) message system: category+title fields on messages, 1char=10yen auto-cost, locked until querent unlocks via /api/unlock_message. Color-coded bubbles (free=emerald, paid=fuchsia, treatment=amber). Full-width Japanese input validation on all chat inputs.

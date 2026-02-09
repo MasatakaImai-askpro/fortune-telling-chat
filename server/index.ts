@@ -123,10 +123,14 @@ wss.on("connection", async (ws, req) => {
         messages: msgs.map((m) => ({
           id: String(m.id),
           sender: m.sender,
-          text: m.text,
+          text: m.isLocked && m.category === "treatment" ? null : m.text,
+          title: m.title || null,
+          category: m.category || "free",
+          cost_pt: m.costPt,
+          is_locked: m.isLocked,
           created_at: m.createdAt.toISOString(),
           attachments: [],
-          free: m.costPt === 0 && m.sender === "querent",
+          free: m.category === "free" && m.sender === "querent",
         })),
       }));
     } catch (e) {
@@ -145,7 +149,7 @@ wss.on("connection", async (ws, req) => {
       const data = JSON.parse(raw.toString());
       if (data.type !== "chat_message") return;
 
-      const { sender, text, category, point, free: isFree } = data;
+      const { sender, text, category, title, free: isFree } = data;
       let roomId = client.roomId;
 
       if (!roomId && client.fortunetellerId) {
@@ -160,30 +164,36 @@ wss.on("connection", async (ws, req) => {
       let costPt: number | null = null;
       let isLocked = false;
       let msgFree = false;
+      let msgCategory = category || "free";
 
       if (sender === "fortuneteller") {
         if (category === "length_paying") {
           costPt = text.length * 2;
           isLocked = true;
-        } else if (category === "healing" && point) {
-          costPt = Number(point);
+          msgCategory = "length_paying";
+        } else if (category === "treatment") {
+          costPt = text.length * 10;
           isLocked = true;
+          msgCategory = "treatment";
         }
       } else if (sender === "querent" && text) {
         const isValidFreeTemplate = isFree && SERVER_FREE_TEMPLATES.includes(text.trim());
         if (isValidFreeTemplate) {
           msgFree = true;
           costPt = 0;
+          msgCategory = "free";
         } else {
           const activeSub = await storage.getActiveSubscription(userId);
           if (activeSub) {
             costPt = 0;
+            msgCategory = "free";
           } else {
             const roomData = await storage.getRoom(roomId);
             if (roomData) {
               const ftProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
               const mult = RANK_MULT[ftProfile?.rank || "SILVER"] || 1;
               costPt = text.length * mult;
+              msgCategory = "length_paying";
               const deducted = await storage.deductPoints(userId, costPt);
               if (!deducted) {
                 ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
@@ -198,6 +208,8 @@ wss.on("connection", async (ws, req) => {
         roomId,
         sender,
         text,
+        title: category === "treatment" ? (title || null) : null,
+        category: msgCategory,
         costPt,
         isLocked,
       });
@@ -207,7 +219,11 @@ wss.on("connection", async (ws, req) => {
         message: {
           id: String(msg.id),
           sender: msg.sender,
-          text: msg.text,
+          text: msg.isLocked && msg.category === "treatment" ? null : msg.text,
+          title: msg.title || null,
+          category: msg.category || "free",
+          cost_pt: msg.costPt,
+          is_locked: msg.isLocked,
           created_at: msg.createdAt.toISOString(),
           attachments: [],
           free: msgFree,

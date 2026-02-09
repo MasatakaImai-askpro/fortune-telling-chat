@@ -69,7 +69,11 @@ type Advisor = {
 type ChatMessage = {
   id: number | string;
   sender: "querent" | "fortuneteller";
-  text: string;
+  text: string | null;
+  title?: string | null;
+  category?: string;
+  cost_pt?: number;
+  is_locked?: boolean;
   created_at: string;
   attachments?: any[];
   free?: boolean;
@@ -379,6 +383,19 @@ function ConfirmModal({ cost, onConfirm, onCancel, querentInfo }: { cost: number
   );
 }
 
+const FULLWIDTH_REGEX = /^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3000-\u303F\uFF00-\uFF9F\u2000-\u206F\s\n\r、。！？「」『』（）・ー〜…―]+$/;
+const isValidJapaneseText = (text: string) => text.trim() === "" || FULLWIDTH_REGEX.test(text);
+
+function getQuerentBubbleColor(m: ChatMessage): string {
+  if (m.sender === "querent") {
+    if (m.free || m.category === "free") return "bg-emerald-600";
+    return "bg-gradient-to-br from-indigo-600 to-fuchsia-600";
+  }
+  if (m.category === "treatment") return "bg-amber-700/80 border border-amber-500/30";
+  if (m.category === "length_paying") return "bg-fuchsia-700/60 border border-fuchsia-500/30";
+  return "bg-white/8 border border-white/10";
+}
+
 function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, setThreads, onBack, querentInfo }: {
   plan: string; points: number; setPoints: (fn: (p: number) => number) => void; subscriptionActive: boolean; advisor: Advisor | null;
   thread?: Thread; setThreads: React.Dispatch<React.SetStateAction<ThreadsMap>>; onBack: () => void; querentInfo: QuerentInfo | null;
@@ -393,6 +410,8 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   const [room, setRoom] = useState<{ id: string } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
+  const [inputError, setInputError] = useState("");
   const messages = thread?.messages ?? [];
 
   const scrollBottom = useCallback(() => {
@@ -450,6 +469,50 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
 
   if (!advisor) return <section className="py-12 text-center text-white/70">まず占い師を選んでください（ホームまたは「占い師」から）。</section>;
 
+  const handleTextChange = (value: string) => {
+    setText(value);
+    if (showTemplates) setShowTemplates(false);
+    setIsFromTemplate(false);
+    if (value && !isValidJapaneseText(value)) {
+      setInputError("全角ひらがな・カタカナ・漢字のみ入力可能です");
+    } else {
+      setInputError("");
+    }
+  };
+
+  const unlockTreatment = async (msgId: string, costPt: number) => {
+    if (unlockingId) return;
+    const doUnlock = confirm(`この施術メッセージを開封しますか？\n${costPt}pt（約${Math.round(costPt * YEN_PER_POINT).toLocaleString()}円）を消費します。`);
+    if (!doUnlock) return;
+    setUnlockingId(msgId);
+    try {
+      const res = await apiRequest("POST", "/api/unlock_message", { message_id: msgId });
+      const data = await res.json();
+      setThreads((prev) => {
+        if (!advisor) return prev;
+        const t = prev[advisor.id];
+        if (!t) return prev;
+        return {
+          ...prev,
+          [advisor.id]: {
+            ...t,
+            messages: t.messages.map((m) =>
+              String(m.id) === msgId
+                ? { ...m, text: data.unlocked_message.text, title: data.unlocked_message.title, is_locked: false }
+                : m
+            ),
+          },
+        };
+      });
+      if (costPt > 0 && !(plan === "subscription" && subscriptionActive)) setPoints((p) => p - costPt);
+      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+    } catch (e: any) {
+      alert(e.message || "開封に失敗しました");
+    } finally {
+      setUnlockingId(null);
+    }
+  };
+
   const executeSend = (cost: number, free: boolean) => {
     if (!free && !(plan === "subscription" && subscriptionActive)) setPoints((p) => p - cost);
     const payload: any = { type: "chat_message", sender: "querent", text: text.trim(), attachments: uploads, free };
@@ -457,12 +520,16 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(payload));
     } else { console.warn("WebSocket not open"); }
-    setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false); setIsFromTemplate(false);
+    setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false); setIsFromTemplate(false); setInputError("");
   };
 
   const onSend = () => {
     const trimmed = text.trim();
     if (trimmed === "" && uploads.length === 0) return;
+    if (!isFromTemplate && trimmed && !isValidJapaneseText(trimmed)) {
+      setInputError("全角ひらがな・カタカナ・漢字のみ入力可能です");
+      return;
+    }
     if (isFromTemplate) { executeSend(0, true); return; }
     if (plan === "subscription" && subscriptionActive) { executeSend(0, false); return; }
     const rankInfo = getRankInfo(advisor.rank);
@@ -482,7 +549,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     setUploads(newUploads); e.target.value = "";
   };
   const removeUpload = (i: number) => setUploads((prev) => prev.filter((_, idx) => idx !== i));
-  const applyTemplate = (t: string) => { setText(t); setShowTemplates(false); setIsFromTemplate(true); };
+  const applyTemplate = (t: string) => { setText(t); setShowTemplates(false); setIsFromTemplate(true); setInputError(""); };
 
   if (roomLoading) return <div className="text-white/60 p-4">読み込み中...</div>;
 
@@ -524,13 +591,32 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           <ul className="space-y-3">
             {messages.map((m) => (
               <li key={m.id} className={cls("px-2", m.sender === "querent" ? "text-right" : "text-left")}>
-                <div className={cls("inline-block max-w-[85%] rounded-2xl p-3 shadow-lg",
-                  m.sender === "querent" ? (m.free ? "bg-green-600" : "bg-gradient-to-br from-indigo-600 to-fuchsia-600") : "bg-white/8 border border-white/10"
-                )} data-testid={`message-${m.id}`}>
+                <div className={cls("inline-block max-w-[85%] rounded-2xl p-3 shadow-lg", getQuerentBubbleColor(m))} data-testid={`message-${m.id}`}>
                   <div className={cls("text-[10px] mb-1", m.sender === "querent" ? "text-white/70" : "text-white/60")}>
-                    {m.sender === "querent" ? (m.free ? "あなた(無料)" : "あなた") : "占い師"} {timefmt(m.created_at)}
+                    {m.sender === "querent"
+                      ? (m.free || m.category === "free" ? "あなた(無料)" : "あなた")
+                      : (m.category === "treatment" ? "占い師 [施術]" : m.category === "length_paying" ? "占い師 [有料]" : "占い師")
+                    } {timefmt(m.created_at)}
                   </div>
-                  <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-white/90")}>{m.text}</p>
+                  {m.category === "treatment" && m.title && !m.is_locked && (
+                    <div className="text-[11px] font-bold mb-1 border-b border-white/20 pb-1">{m.title}</div>
+                  )}
+                  {m.is_locked && m.category === "treatment" ? (
+                    <div className="space-y-2">
+                      {m.title && <div className="text-[11px] font-bold">{m.title}</div>}
+                      <div className="text-xs text-white/60 italic">[施術メッセージ: {m.cost_pt ?? 0}pt]</div>
+                      <button
+                        onClick={() => unlockTreatment(String(m.id), m.cost_pt ?? 0)}
+                        disabled={unlockingId === String(m.id)}
+                        className="text-[11px] bg-amber-500 text-gray-900 font-semibold px-3 py-1 rounded-lg hover-elevate active-elevate-2 disabled:opacity-50"
+                        data-testid={`button-unlock-${m.id}`}
+                      >
+                        {unlockingId === String(m.id) ? "開封中..." : `開封する（${m.cost_pt ?? 0}pt消費）`}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-white/90")}>{m.text}</p>
+                  )}
                 </div>
               </li>
             ))}
@@ -554,8 +640,9 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             ))}
           </div>
         )}
+        {inputError && <div className="text-[10px] text-red-400 mb-1" data-testid="text-input-error">{inputError}</div>}
         <div className="bg-[#111a2e] border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-xl">
-          <textarea value={text} onChange={(e) => { setText(e.target.value); if (showTemplates) setShowTemplates(false); setIsFromTemplate(false); }}
+          <textarea value={text} onChange={(e) => handleTextChange(e.target.value)}
             onFocus={() => { if (text.trim() === "" && uploads.length === 0) setShowTemplates(true); }}
             placeholder="ご相談内容を入力..." data-testid="input-chat-message"
             className="flex-1 bg-transparent outline-none resize-none text-sm max-h-28 min-h-[44px] placeholder:text-white/50" />

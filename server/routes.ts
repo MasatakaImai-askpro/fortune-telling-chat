@@ -416,6 +416,50 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  app.post("/api/unlock_message", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+
+      const { message_id } = req.body;
+      if (!message_id) return res.status(400).json({ error: "message_id is required" });
+
+      const msg = await storage.getMessage(Number(message_id));
+      if (!msg) return res.status(404).json({ error: "メッセージが見つかりません" });
+      if (!msg.isLocked) return res.status(400).json({ error: "このメッセージは既に開封済みです" });
+      if (msg.category !== "treatment") return res.status(400).json({ error: "施術メッセージのみ開封できます" });
+
+      const room = await storage.getRoom(msg.roomId);
+      if (!room || room.querentId !== user.id) return res.status(403).json({ error: "権限がありません" });
+
+      const cost = msg.costPt ?? 0;
+      if (cost > 0) {
+        const activeSub = await storage.getActiveSubscription(user.id);
+        if (!activeSub) {
+          const deducted = await storage.deductPoints(user.id, cost);
+          if (!deducted) return res.status(400).json({ error: "ポイントが不足しています" });
+        }
+      }
+
+      const updated = await storage.unlockMessage(msg.id);
+      if (!updated) return res.status(500).json({ error: "開封に失敗しました" });
+
+      res.json({
+        message: "施術メッセージを開封しました",
+        unlocked_message: {
+          id: String(updated.id),
+          text: updated.text,
+          title: updated.title,
+          cost_pt: updated.costPt,
+          is_locked: false,
+          category: updated.category,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/get_fortuneteller_all", async (_req: Request, res: Response) => {
     try {
       const profiles = await storage.getAllFortunetellerProfiles();

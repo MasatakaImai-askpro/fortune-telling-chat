@@ -67,6 +67,8 @@ export const messages = pgTable("messages", {
   roomId: uuid("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
   sender: varchar("sender", { length: 15 }).notNull(),
   text: text("text"),
+  title: varchar("title", { length: 100 }),
+  category: varchar("category", { length: 20 }).notNull().default("free"),
   costPt: integer("cost_pt"),
   isLocked: boolean("is_locked").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),

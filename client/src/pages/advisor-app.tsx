@@ -16,10 +16,13 @@ type Room = {
 type Message = {
   id: string;
   sender: string;
-  text: string;
+  text: string | null;
+  title?: string | null;
+  category?: string;
   created_at: string;
   cost_pt?: number;
   is_locked?: boolean;
+  free?: boolean;
 };
 
 type Profile = {
@@ -56,13 +59,28 @@ type Querent = {
   points: number;
 };
 
+const FULLWIDTH_REGEX = /^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u3000-\u303F\uFF00-\uFF9F\u2000-\u206F\s\n\r、。！？「」『』（）・ー〜…―]+$/;
+const isValidJapaneseText = (text: string) => text.trim() === "" || FULLWIDTH_REGEX.test(text);
+
+function getBubbleColor(m: Message): string {
+  if (m.sender === "fortuneteller") {
+    if (m.category === "treatment") return "bg-amber-700/80 text-white rounded-br-md";
+    if (m.category === "length_paying") return "bg-fuchsia-700/80 text-white rounded-br-md";
+    return "bg-emerald-700/60 text-white rounded-br-md";
+  }
+  if (m.free || m.category === "free") return "bg-emerald-700/60 text-white/90 rounded-bl-md";
+  if (m.category === "treatment") return "bg-amber-700/80 text-white/90 rounded-bl-md";
+  return "bg-white/10 text-white/90 rounded-bl-md";
+}
+
 function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [treatmentTitle, setTreatmentTitle] = useState("");
   const [connected, setConnected] = useState(false);
-  const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "healing">("free");
-  const [healingPt, setHealingPt] = useState("");
+  const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "treatment">("free");
+  const [inputError, setInputError] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -94,21 +112,42 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
     return () => { ws.close(); };
   }, [room.id, user, scrollBottom]);
 
+  function handleInputChange(value: string) {
+    setInput(value);
+    if (value && !isValidJapaneseText(value)) {
+      setInputError("全角ひらがな・カタカナ・漢字のみ入力可能です");
+    } else {
+      setInputError("");
+    }
+  }
+
+  function handleTitleChange(value: string) {
+    if (value && !isValidJapaneseText(value)) return;
+    setTreatmentTitle(value);
+  }
+
   function sendMessage() {
     if (!input.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!isValidJapaneseText(input.trim())) {
+      setInputError("全角ひらがな・カタカナ・漢字のみ入力可能です");
+      return;
+    }
     const payload: any = {
       type: "chat_message",
       sender: "fortuneteller",
       text: input.trim(),
       category: msgCategory,
     };
-    if (msgCategory === "healing" && healingPt) {
-      payload.point = parseInt(healingPt);
+    if (msgCategory === "treatment") {
+      payload.title = treatmentTitle.trim() || null;
     }
     wsRef.current.send(JSON.stringify(payload));
     setInput("");
-    setHealingPt("");
+    setTreatmentTitle("");
+    setInputError("");
   }
+
+  const treatmentCost = msgCategory === "treatment" ? input.trim().length * 10 : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -131,15 +170,22 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.sender === "fortuneteller" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-              m.sender === "fortuneteller"
-                ? "bg-fuchsia-700/80 text-white rounded-br-md"
-                : "bg-white/10 text-white/90 rounded-bl-md"
-            }`} data-testid={`ft-message-${m.id}`}>
-              {m.text}
+            <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${getBubbleColor(m)}`} data-testid={`ft-message-${m.id}`}>
+              {m.category === "treatment" && m.title && (
+                <div className="text-[11px] font-bold mb-1 border-b border-white/20 pb-1" data-testid={`ft-msg-title-${m.id}`}>
+                  {m.title}
+                </div>
+              )}
+              {m.is_locked ? (
+                <div className="text-xs italic text-white/50">[施術 - 開封待ち: {m.cost_pt ?? 0}pt]</div>
+              ) : (
+                m.text
+              )}
               <div className="text-[10px] text-white/40 mt-1 text-right">
                 {new Date(m.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
                 {m.cost_pt ? ` (${m.cost_pt}pt)` : ""}
+                {m.category === "treatment" && " [施術]"}
+                {m.category === "length_paying" && " [有料]"}
               </div>
             </div>
           </div>
@@ -148,29 +194,39 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
 
       <div className="border-t border-white/10 bg-[#0d1a33]">
         <div className="flex items-center gap-1 px-3 pt-2">
-          {(["free", "length_paying", "healing"] as const).map((cat) => (
+          {(["free", "length_paying", "treatment"] as const).map((cat) => (
             <button key={cat} onClick={() => setMsgCategory(cat)}
               data-testid={`button-category-${cat}`}
               className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
                 msgCategory === cat
-                  ? "bg-fuchsia-600 border-fuchsia-500 text-white"
+                  ? cat === "treatment" ? "bg-amber-600 border-amber-500 text-white" : "bg-fuchsia-600 border-fuchsia-500 text-white"
                   : "bg-white/5 border-white/10 text-white/50 hover:text-white/80"
               }`}>
-              {cat === "free" ? "無料" : cat === "length_paying" ? "文字課金" : "ヒーリング"}
+              {cat === "free" ? "無料" : cat === "length_paying" ? "文字課金" : "施術"}
             </button>
           ))}
-          {msgCategory === "healing" && (
-            <input type="number" value={healingPt} onChange={(e) => setHealingPt(e.target.value)} data-testid="input-healing-pt"
-              placeholder="pt" className="w-16 text-[11px] rounded-lg bg-white/10 border border-white/20 px-2 py-1 text-center" />
-          )}
         </div>
+        {msgCategory === "treatment" && (
+          <div className="px-3 pt-2 space-y-1">
+            <input type="text" value={treatmentTitle} onChange={(e) => handleTitleChange(e.target.value)} data-testid="input-treatment-title"
+              placeholder="施術タイトル" maxLength={100}
+              className="w-full rounded-xl bg-white/10 border border-white/20 px-3 py-1.5 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
+            {input.trim().length > 0 && (
+              <div className="text-[11px] text-amber-300" data-testid="text-treatment-cost">
+                自動計算: {input.trim().length}文字 x 10円 = <b>{treatmentCost.toLocaleString()}円（{treatmentCost}pt）</b>
+              </div>
+            )}
+          </div>
+        )}
+        {inputError && <div className="text-[10px] text-red-400 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
         <div className="flex items-center gap-2 p-3">
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} data-testid="input-ft-message"
+          <input type="text" value={input} onChange={(e) => handleInputChange(e.target.value)} data-testid="input-ft-message"
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-            placeholder="メッセージを入力..."
+            placeholder={msgCategory === "treatment" ? "施術の本文を入力..." : "メッセージを入力..."}
             className="flex-1 rounded-xl bg-white/10 border border-white/20 px-3 py-2 text-sm placeholder:text-white/50 focus:ring-2 focus:ring-fuchsia-400 focus:outline-none" />
           <button onClick={sendMessage} data-testid="button-ft-send"
-            className="w-9 h-9 rounded-full bg-fuchsia-600 hover:bg-fuchsia-700 flex items-center justify-center transition-colors">
+            disabled={!!inputError || !input.trim()}
+            className="w-9 h-9 rounded-full bg-fuchsia-600 flex items-center justify-center transition-colors disabled:opacity-50 hover-elevate active-elevate-2">
             <Send className="w-4 h-4 text-white" />
           </button>
         </div>

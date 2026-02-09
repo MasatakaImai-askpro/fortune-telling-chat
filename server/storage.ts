@@ -36,8 +36,10 @@ export interface IStorage {
   getRoomsByQuerent(querentId: number): Promise<Room[]>;
 
   getMessagesByRoom(roomId: string): Promise<Message[]>;
+  getMessage(id: number): Promise<Message | undefined>;
   createMessage(message: InsertMessage): Promise<Message>;
   createMessages(msgs: InsertMessage[]): Promise<Message[]>;
+  unlockMessage(id: number): Promise<Message | undefined>;
 
   deductPoints(userId: number, amount: number): Promise<boolean>;
 
@@ -146,6 +148,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(messages).where(eq(messages.roomId, roomId)).orderBy(messages.createdAt);
   }
 
+  async getMessage(id: number): Promise<Message | undefined> {
+    const [msg] = await db.select().from(messages).where(eq(messages.id, id));
+    return msg;
+  }
+
   async createMessage(message: InsertMessage): Promise<Message> {
     const [created] = await db.insert(messages).values(message).returning();
     return created;
@@ -155,6 +162,12 @@ export class DatabaseStorage implements IStorage {
     if (msgs.length === 0) return [];
     return db.insert(messages).values(msgs).returning();
   }
+
+  async unlockMessage(id: number): Promise<Message | undefined> {
+    const [updated] = await db.update(messages).set({ isLocked: false }).where(eq(messages.id, id)).returning();
+    return updated;
+  }
+
   async deductPoints(userId: number, amount: number): Promise<boolean> {
     const result = await db.update(querentProfiles)
       .set({ points: sql`${querentProfiles.points} - ${amount}` })
