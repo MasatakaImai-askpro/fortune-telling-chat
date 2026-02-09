@@ -70,6 +70,7 @@ export const messages = pgTable("messages", {
   title: varchar("title", { length: 100 }),
   category: varchar("category", { length: 20 }).notNull().default("free"),
   costPt: integer("cost_pt"),
+  bonusPt: integer("bonus_pt").default(0),
   isLocked: boolean("is_locked").notNull().default(false),
   isReadByQuerent: boolean("is_read_by_querent").notNull().default(false),
   isReadByFortuneteller: boolean("is_read_by_fortuneteller").notNull().default(false),

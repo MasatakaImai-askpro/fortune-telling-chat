@@ -120,6 +120,9 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
           }
         } else if (data.type === "new_message" && data.message) {
           setMessages((prev) => [...prev, data.message]);
+          if (data.message.subscription_bonus && data.message.sender === "fortuneteller") {
+            alert(`サブスク会員への初回対応ボーナス: +${data.message.subscription_bonus}pt を獲得しました！`);
+          }
           setTimeout(scrollBottom, 50);
         }
       } catch {}

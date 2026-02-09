@@ -22,9 +22,12 @@ const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.BRONZE;
 const SAMPLE_GENRES = ["恋愛", "仕事", "人間関係", "金運", "健康"];
 
 const FREE_TEMPLATES = [
-  "はじめまして。最近悩んでいることがあり、ご相談させてください。",
-  "恋愛について占っていただきたいです。",
-  "仕事の転機が来ている気がします。アドバイスをお願いします。",
+  "ご依頼よろしくお願いします",
+  "鑑定お願いできますか？",
+  "施術をお願いできますか？",
+  "前回の続きからよろしくお願します",
+  "はい",
+  "相談ありがとうございました",
 ];
 
 const cls = (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(" ");
@@ -547,9 +550,13 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     }
   };
 
+  const isSub = plan === "subscription" && subscriptionActive;
   const unlockTreatment = async (msgId: string, costPt: number) => {
     if (unlockingId) return;
-    const doUnlock = confirm(`この施術メッセージを開封しますか？\n${costPt}pt（約${Math.round(costPt * YEN_PER_POINT).toLocaleString()}円）を消費します。`);
+    const confirmMsg = isSub
+      ? "この施術メッセージを開封しますか？\nサブスク会員のためポイント消費はありません。"
+      : `この施術メッセージを開封しますか？\n${costPt}pt（約${Math.round(costPt * YEN_PER_POINT).toLocaleString()}円）を消費します。`;
+    const doUnlock = confirm(confirmMsg);
     if (!doUnlock) return;
     setUnlockingId(msgId);
     try {
@@ -678,7 +685,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                         className="text-[11px] bg-amber-500 text-gray-900 font-semibold px-3 py-1 rounded-lg hover-elevate active-elevate-2 disabled:opacity-50"
                         data-testid={`button-unlock-${m.id}`}
                       >
-                        {unlockingId === String(m.id) ? "開封中..." : `開封する（${m.cost_pt ?? 0}pt消費）`}
+                        {unlockingId === String(m.id) ? "開封中..." : isSub ? "開封する（サブスク会員無料）" : `開封する（${m.cost_pt ?? 0}pt消費）`}
                       </button>
                     </div>
                   ) : (

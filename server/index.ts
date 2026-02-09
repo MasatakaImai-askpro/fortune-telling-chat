@@ -146,9 +146,12 @@ wss.on("connection", async (ws, req) => {
 
   ws.on("message", async (raw) => {
     const SERVER_FREE_TEMPLATES = [
-      "はじめまして。最近悩んでいることがあり、ご相談させてください。",
-      "恋愛について占っていただきたいです。",
-      "仕事の転機が来ている気がします。アドバイスをお願いします。",
+      "ご依頼よろしくお願いします",
+      "鑑定お願いできますか？",
+      "施術をお願いできますか？",
+      "前回の続きからよろしくお願します",
+      "はい",
+      "相談ありがとうございました",
     ];
     try {
       const data = JSON.parse(raw.toString());
@@ -181,6 +184,7 @@ wss.on("connection", async (ws, req) => {
       let msgFree = false;
       let msgCategory = category || "free";
 
+      let subscriptionBonus = 0;
       if (sender === "fortuneteller") {
         if (category === "length_paying") {
           costPt = text.length * 2;
@@ -190,6 +194,16 @@ wss.on("connection", async (ws, req) => {
           costPt = text.length * 10;
           isLocked = true;
           msgCategory = "treatment";
+        }
+        const roomData = await storage.getRoom(roomId);
+        if (roomData) {
+          const querentSub = await storage.getActiveSubscription(roomData.querentId);
+          if (querentSub) {
+            const hasReplied = await storage.hasFortunetellerRepliedInRoom(roomId, roomData.fortunetellerId, 30);
+            if (!hasReplied) {
+              subscriptionBonus = 2000;
+            }
+          }
         }
       } else if (sender === "querent" && text) {
         const isValidFreeTemplate = isFree && SERVER_FREE_TEMPLATES.includes(text.trim());
@@ -232,6 +246,7 @@ wss.on("connection", async (ws, req) => {
         title: category === "treatment" ? (title || null) : null,
         category: msgCategory,
         costPt,
+        bonusPt: subscriptionBonus > 0 ? subscriptionBonus : 0,
         isLocked,
         isReadByQuerent: isFromQuerent,
         isReadByFortuneteller: !isFromQuerent,
@@ -250,6 +265,7 @@ wss.on("connection", async (ws, req) => {
           created_at: msg.createdAt.toISOString(),
           attachments: [],
           free: msgFree,
+          subscription_bonus: subscriptionBonus > 0 ? subscriptionBonus : undefined,
         },
       });
     } catch (e) {

@@ -60,6 +60,7 @@ export interface IStorage {
   updateUser(id: number, data: Partial<{ email: string; role: string }>): Promise<User | undefined>;
 
   getFortuneteller6MonthRevenue(fortunetellerId: number): Promise<number>;
+  hasFortunetellerRepliedInRoom(roomId: string, fortunetellerId: number, withinDays: number): Promise<boolean>;
   getUnreadCountForRoom(roomId: string, role: "querent" | "fortuneteller"): Promise<number>;
   markRoomRead(roomId: string, role: "querent" | "fortuneteller"): Promise<void>;
   getTotalUnreadCount(userId: number, role: "querent" | "fortuneteller"): Promise<number>;
@@ -267,7 +268,7 @@ export class DatabaseStorage implements IStorage {
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const result = await db.select({
-      total: sql<number>`COALESCE(SUM(${messages.costPt}), 0)`,
+      total: sql<number>`COALESCE(SUM(COALESCE(${messages.costPt}, 0) + COALESCE(${messages.bonusPt}, 0)), 0)`,
     })
       .from(messages)
       .innerJoin(rooms, eq(messages.roomId, rooms.id))
@@ -279,6 +280,23 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return Number(result[0]?.total || 0);
+  }
+
+  async hasFortunetellerRepliedInRoom(roomId: string, fortunetellerId: number, withinDays: number): Promise<boolean> {
+    const since = new Date();
+    since.setDate(since.getDate() - withinDays);
+    const result = await db.select({ cnt: count() })
+      .from(messages)
+      .innerJoin(rooms, eq(messages.roomId, rooms.id))
+      .where(
+        and(
+          eq(messages.roomId, roomId),
+          eq(rooms.fortunetellerId, fortunetellerId),
+          eq(messages.sender, "fortuneteller"),
+          gte(messages.createdAt, since)
+        )
+      );
+    return Number(result[0]?.cnt || 0) > 0;
   }
 
   async getUnreadCountForRoom(roomId: string, role: "querent" | "fortuneteller"): Promise<number> {
