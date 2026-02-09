@@ -3,7 +3,7 @@ import session from "express-session";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import bcrypt from "bcrypt";
-import { storage } from "./storage";
+import { storage, computeRankFromRevenue } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import connectPgSimple from "connect-pg-simple";
@@ -139,7 +139,6 @@ wss.on("connection", async (ws, req) => {
   }
 
   ws.on("message", async (raw) => {
-    const RANK_MULT: Record<string, number> = { PLATINUM: 3, GOLD: 2, SILVER: 1 };
     const SERVER_FREE_TEMPLATES = [
       "はじめまして。最近悩んでいることがあり、ご相談させてください。",
       "恋愛について占っていただきたいです。",
@@ -147,6 +146,16 @@ wss.on("connection", async (ws, req) => {
     ];
     try {
       const data = JSON.parse(raw.toString());
+
+      if (data.type === "mark_read" && client.roomId) {
+        const user = await storage.getUser(userId);
+        if (user) {
+          const role: "querent" | "fortuneteller" = user.role === "2" ? "fortuneteller" : "querent";
+          await storage.markRoomRead(client.roomId, role);
+        }
+        return;
+      }
+
       if (data.type !== "chat_message") return;
 
       const { sender, text, category, title, free: isFree } = data;
@@ -190,8 +199,13 @@ wss.on("connection", async (ws, req) => {
           } else {
             const roomData = await storage.getRoom(roomId);
             if (roomData) {
-              const ftProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
-              const mult = RANK_MULT[ftProfile?.rank || "SILVER"] || 1;
+              const revenue = await storage.getFortuneteller6MonthRevenue(roomData.fortunetellerId);
+              const rankInfo = computeRankFromRevenue(revenue);
+              const RANK_MULT: Record<string, number> = {
+                DIAMOND_PLUS: 7, DIAMOND: 6, PLATINUM_PLUS: 5,
+                PLATINUM: 4, GOLD: 3, SILVER: 2, BRONZE: 1,
+              };
+              const mult = RANK_MULT[rankInfo.rank] || 1;
               costPt = text.length * mult;
               msgCategory = "length_paying";
               const deducted = await storage.deductPoints(userId, costPt);
@@ -204,6 +218,7 @@ wss.on("connection", async (ws, req) => {
         }
       }
 
+      const isFromQuerent = sender === "querent";
       const msg = await storage.createMessage({
         roomId,
         sender,
@@ -212,6 +227,8 @@ wss.on("connection", async (ws, req) => {
         category: msgCategory,
         costPt,
         isLocked,
+        isReadByQuerent: isFromQuerent,
+        isReadByFortuneteller: !isFromQuerent,
       });
 
       broadcastToRoom(roomId, {

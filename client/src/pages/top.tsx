@@ -9,11 +9,15 @@ const API_BASE = "";
 const YEN_PER_POINT = 1.5;
 
 const RANK_TABLE: Record<string, { key: string; jp: string; mult: number; color: string }> = {
-  PLATINUM: { key: "PLATINUM", jp: "プラチナ", mult: 3, color: "from-slate-200 to-zinc-500" },
-  GOLD: { key: "GOLD", jp: "ゴールド", mult: 2, color: "from-amber-200 to-orange-500" },
-  SILVER: { key: "SILVER", jp: "シルバー", mult: 1, color: "from-neutral-200 to-gray-400" },
+  DIAMOND_PLUS: { key: "DIAMOND_PLUS", jp: "ダイヤモンド+", mult: 7, color: "from-cyan-200 to-blue-500" },
+  DIAMOND: { key: "DIAMOND", jp: "ダイヤモンド", mult: 6, color: "from-cyan-100 to-sky-400" },
+  PLATINUM_PLUS: { key: "PLATINUM_PLUS", jp: "プラチナ+", mult: 5, color: "from-violet-200 to-purple-500" },
+  PLATINUM: { key: "PLATINUM", jp: "プラチナ", mult: 4, color: "from-slate-200 to-zinc-500" },
+  GOLD: { key: "GOLD", jp: "ゴールド", mult: 3, color: "from-amber-200 to-orange-500" },
+  SILVER: { key: "SILVER", jp: "シルバー", mult: 2, color: "from-neutral-200 to-gray-400" },
+  BRONZE: { key: "BRONZE", jp: "ブロンズ", mult: 1, color: "from-orange-300 to-amber-700" },
 };
-const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.SILVER;
+const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.BRONZE;
 
 const SAMPLE_GENRES = ["恋愛", "仕事", "人間関係", "金運", "健康"];
 
@@ -55,6 +59,7 @@ type Advisor = {
   headline: string;
   intro: string;
   rank: string;
+  rank_label: string;
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
@@ -396,9 +401,56 @@ function getQuerentBubbleColor(m: ChatMessage): string {
   return "bg-white/8 border border-white/10";
 }
 
-function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, setThreads, onBack, querentInfo }: {
+type RoomInfo = {
+  id: string;
+  fortuneteller_id: number;
+  fortuneteller_name: string;
+  fortuneteller_icon?: string;
+  last_message?: string;
+  last_message_at?: string;
+  unread_count: number;
+};
+
+function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisorId: number) => void; advisors: Advisor[] }) {
+  const { data: rooms = [], isLoading } = useQuery<RoomInfo[]>({
+    queryKey: ["/api/my_rooms"],
+    refetchInterval: 10000,
+  });
+
+  if (isLoading) return <div className="text-white/60 text-center py-8">読み込み中...</div>;
+  if (rooms.length === 0) return <div className="text-center text-white/50 text-sm py-8">まだ相談履歴がありません。占い師を選んで相談を始めましょう。</div>;
+
+  return (
+    <div className="space-y-2">
+      <h3 className="font-semibold text-white/90 text-sm">相談履歴</h3>
+      {rooms.map((room) => (
+        <button key={room.id} onClick={() => onSelectAdvisor(room.fortuneteller_id)}
+          className="w-full text-left bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-3"
+          data-testid={`button-room-${room.id}`}>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-fuchsia-500 to-purple-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {room.fortuneteller_icon ? <img src={room.fortuneteller_icon} alt="" className="w-full h-full rounded-full object-cover" /> : (room.fortuneteller_name || "?").charAt(0)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm truncate">{room.fortuneteller_name}</span>
+              {room.unread_count > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none flex-shrink-0"
+                  data-testid={`badge-unread-room-${room.id}`}>{room.unread_count > 99 ? "99+" : room.unread_count}</span>
+              )}
+            </div>
+            {room.last_message && <p className="text-xs text-white/60 truncate mt-0.5">{room.last_message}</p>}
+          </div>
+          {room.last_message_at && <span className="text-[10px] text-white/40 flex-shrink-0">{timefmt(room.last_message_at)}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, setThreads, onBack, querentInfo, advisors, onSelectAdvisor }: {
   plan: string; points: number; setPoints: (fn: (p: number) => number) => void; subscriptionActive: boolean; advisor: Advisor | null;
   thread?: Thread; setThreads: React.Dispatch<React.SetStateAction<ThreadsMap>>; onBack: () => void; querentInfo: QuerentInfo | null;
+  advisors: Advisor[]; onSelectAdvisor: (advisorId: number) => void;
 }) {
   const [text, setText] = useState("");
   const [uploads, setUploads] = useState<any[]>([]);
@@ -425,7 +477,12 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
         const res = await fetch(`${API_BASE}/api/get_room?fortuneteller=${advisor.id}`, { credentials: "include" });
         if (!res.ok) throw new Error("failed");
         const data = await res.json();
-        if (data) { setRoom({ id: data.id }); } else { setRoom(null); }
+        if (data) {
+          setRoom({ id: data.id });
+          fetch(`${API_BASE}/api/rooms/${data.id}/mark_read`, { method: "POST", credentials: "include" }).catch(() => {});
+          queryClient.invalidateQueries({ queryKey: ["/api/unread_count"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
+        } else { setRoom(null); }
       } catch (e) { console.error(e); setRoom(null); }
       finally { setRoomLoading(false); }
     };
@@ -441,6 +498,10 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     const sock = new WebSocket(wsUrl);
     socketRef.current = sock;
 
+    sock.onopen = () => {
+      sock.send(JSON.stringify({ type: "mark_read" }));
+    };
+
     sock.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "history") {
@@ -448,6 +509,9 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           ...prev,
           [advisor.id]: { advisorId: advisor.id, roomId: data.room_id || room?.id || null, messages: data.messages || [] },
         }));
+        sock.send(JSON.stringify({ type: "mark_read" }));
+        queryClient.invalidateQueries({ queryKey: ["/api/unread_count"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
         setTimeout(scrollBottom, 50);
         return;
       }
@@ -456,6 +520,9 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           const t = prev[advisor.id] ?? { advisorId: advisor.id, roomId: data.room_id || null, messages: [] };
           return { ...prev, [advisor.id]: { ...t, roomId: data.room_id ?? t.roomId, messages: [...(t.messages ?? []), data.message] } };
         });
+        sock.send(JSON.stringify({ type: "mark_read" }));
+        queryClient.invalidateQueries({ queryKey: ["/api/unread_count"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
         setTimeout(scrollBottom, 50);
       }
       if (data.type === "room_init") {
@@ -467,7 +534,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
 
   useEffect(() => { setTimeout(scrollBottom, 100); }, [messages.length, scrollBottom]);
 
-  if (!advisor) return <section className="py-12 text-center text-white/70">まず占い師を選んでください（ホームまたは「占い師」から）。</section>;
+  if (!advisor) return <section className="py-4"><ChatRoomList onSelectAdvisor={onSelectAdvisor} advisors={advisors} /></section>;
 
   const handleTextChange = (value: string) => {
     setText(value);
@@ -676,7 +743,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   );
 }
 
-function BottomNav({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) {
+function BottomNav({ activeTab, setActiveTab, unreadCount = 0 }: { activeTab: string; setActiveTab: (tab: string) => void; unreadCount?: number }) {
   const items = [
     { id: "home", label: "ホーム", icon: HomeIcon },
     { id: "advisors", label: "占い師", icon: Users },
@@ -691,7 +758,13 @@ function BottomNav({ activeTab, setActiveTab }: { activeTab: string; setActiveTa
           return (
             <button key={it.id} onClick={() => setActiveTab(it.id)} data-testid={`button-tab-${it.id}`}
               className={cls("py-3 flex flex-col items-center text-[11px]", activeTab === it.id ? "text-white" : "text-white/60")}>
-              <Icon className="w-5 h-5" />
+              <div className="relative">
+                <Icon className="w-5 h-5" />
+                {it.id === "chat" && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                    data-testid="badge-unread-total">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                )}
+              </div>
               <div className="mt-1">{it.label}</div>
             </button>
           );
@@ -998,6 +1071,12 @@ export default function Top() {
     queryKey: ["/api/get_fortuneteller_all"],
   });
 
+  const { data: unreadData } = useQuery<{ unread_count: number }>({
+    queryKey: ["/api/unread_count"],
+    enabled: !!user && user.role === "1",
+    refetchInterval: 10000,
+  });
+
   useEffect(() => storage.save("plan", plan), [plan]);
   useEffect(() => storage.save("favorites", favorites), [favorites]);
   useEffect(() => storage.save("selectedAdvisorId", selectedAdvisorId), [selectedAdvisorId]);
@@ -1022,10 +1101,11 @@ export default function Top() {
         {activeTab === "home" && <HomeTab advisors={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />}
         {activeTab === "advisors" && <Advisors advisorsFromTop={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />}
         {activeTab === "chat" && <Chat plan={plan} points={points} setPoints={setPoints} subscriptionActive={subscriptionActive}
-          advisor={selectedAdvisor} thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined} setThreads={setThreads} onBack={() => setActiveTab("advisors")} querentInfo={querentInfo} />}
+          advisor={selectedAdvisor} thread={selectedAdvisor ? threads[selectedAdvisor.id] : undefined} setThreads={setThreads} onBack={() => { setSelectedAdvisorId(null); }} querentInfo={querentInfo}
+          advisors={advisors} onSelectAdvisor={startChat} />}
         {activeTab === "account" && <Account queInfoFromQuery={querentInfo} />}
       </main>
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={unreadData?.unread_count ?? 0} />
     </div>
   );
 }

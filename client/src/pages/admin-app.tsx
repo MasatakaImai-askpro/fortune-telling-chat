@@ -11,6 +11,9 @@ type RankedAdvisor = {
   name: string;
   headline: string;
   rank: string;
+  rank_label: string;
+  revenue: number;
+  cashable: number;
   is_recommended: boolean;
   style: string;
 };
@@ -35,11 +38,16 @@ type AdminUser = {
   created_at: string;
   profile_name: string | null;
   rank: string | null;
+  rank_label: string | null;
   points: number | null;
   is_subscription: boolean | null;
 };
 
-const rankLabel: Record<string, string> = { SILVER: "シルバー", GOLD: "ゴールド", PLATINUM: "プラチナ" };
+const rankLabel: Record<string, string> = {
+  BRONZE: "ブロンズ", SILVER: "シルバー", GOLD: "ゴールド",
+  PLATINUM: "プラチナ", PLATINUM_PLUS: "プラチナ+",
+  DIAMOND: "ダイヤモンド", DIAMOND_PLUS: "ダイヤモンド+",
+};
 const statusLabel: Record<string, string> = { pending: "申請中", approved: "承認済み", transferred: "送金済み" };
 const statusColor: Record<string, string> = {
   pending: "bg-yellow-600/60 text-yellow-200",
@@ -51,13 +59,11 @@ function RankingTab() {
   const queryClient = useQueryClient();
   const { data: ranking, isLoading } = useQuery<RankedAdvisor[]>({ queryKey: ["/api/admin/ranking"] });
   const [editing, setEditing] = useState<number | null>(null);
-  const [editRank, setEditRank] = useState("");
   const [editRecommended, setEditRecommended] = useState(false);
   const [saving, setSaving] = useState(false);
 
   function startEdit(a: RankedAdvisor) {
     setEditing(a.user_id);
-    setEditRank(a.rank);
     setEditRecommended(a.is_recommended);
   }
 
@@ -65,7 +71,6 @@ function RankingTab() {
     setSaving(true);
     try {
       await apiRequest("PATCH", `/api/admin/ranking/${userId}`, {
-        rank: editRank,
         is_recommended: editRecommended,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/ranking"] });
@@ -84,9 +89,9 @@ function RankingTab() {
       <div className="px-4 py-3 border-b border-white/10">
         <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-ranking-title">
           <Trophy className="w-5 h-5 text-amber-400" />
-          注目ランキング ベスト10
+          売上ランキング ベスト10
         </h2>
-        <p className="text-[11px] text-white/50 mt-1">ランクと注目設定を管理できます</p>
+        <p className="text-[11px] text-white/50 mt-1">過去6ヶ月の売上で自動算出。注目設定のみ管理できます。</p>
       </div>
       <div className="divide-y divide-white/5">
         {(ranking ?? []).map((a) => (
@@ -96,17 +101,6 @@ function RankingTab() {
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-amber-400 w-8">{a.rank_position}</span>
                   <span className="text-sm font-semibold">{a.name}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <label className="text-[11px] text-white/60">ランク:</label>
-                  {["SILVER", "GOLD", "PLATINUM"].map((r) => (
-                    <button key={r} onClick={() => setEditRank(r)} data-testid={`button-rank-${r}`}
-                      className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                        editRank === r ? "bg-fuchsia-600 border-fuchsia-500 text-white" : "bg-white/5 border-white/10 text-white/50"
-                      }`}>
-                      {rankLabel[r]}
-                    </button>
-                  ))}
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-[11px] text-white/60">注目:</label>
@@ -134,7 +128,7 @@ function RankingTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold">{a.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">{rankLabel[a.rank] || a.rank}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-fuchsia-700/50 text-fuchsia-200">{a.rank_label || rankLabel[a.rank] || a.rank}</span>
                     {a.is_recommended && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200">
                         <Star className="w-3 h-3 inline" /> 注目
@@ -142,6 +136,9 @@ function RankingTab() {
                     )}
                   </div>
                   <div className="text-xs text-white/50 truncate">{a.headline}</div>
+                  <div className="text-[10px] text-white/40 mt-0.5">
+                    売上: {a.revenue.toLocaleString()}pt / 換金可能: {a.cashable.toLocaleString()}pt
+                  </div>
                 </div>
                 <button onClick={() => startEdit(a)} data-testid={`button-edit-ranking-${a.user_id}`}
                   className="text-white/40 hover:text-white/80 transition-colors p-1">
@@ -417,7 +414,7 @@ function UserManagementTab() {
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
                   u.role === "9" ? "bg-red-700/50 text-red-200" : u.role === "2" ? "bg-fuchsia-700/50 text-fuchsia-200" : "bg-blue-700/50 text-blue-200"
                 }`}>{u.role_label}</span>
-                {u.rank && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/60">{rankLabel[u.rank] || u.rank}</span>}
+                {u.rank && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-white/60">{u.rank_label || rankLabel[u.rank] || u.rank}</span>}
                 {u.is_subscription && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-600/60 text-amber-200">サブスク</span>}
               </div>
               <div className="text-[10px] text-white/30 truncate">{u.email}</div>

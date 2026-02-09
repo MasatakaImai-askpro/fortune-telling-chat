@@ -9,8 +9,11 @@ type Room = {
   id: string;
   querent_id: number;
   querent_name: string;
+  fortuneteller_id: number;
+  fortuneteller_name: string;
   last_message?: string;
   last_at?: string;
+  unread_count?: number;
 };
 
 type Message = {
@@ -31,6 +34,7 @@ type Profile = {
   headline: string;
   intro: string;
   rank: string;
+  rank_label?: string;
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
@@ -76,6 +80,7 @@ function getBubbleColor(m: Message): string {
 
 function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [treatmentTitle, setTreatmentTitle] = useState("");
@@ -88,6 +93,13 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const scrollBottom = useCallback(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, []);
+
+  useEffect(() => {
+    apiRequest("POST", `/api/rooms/${room.id}/mark_read`, {}).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/unread_count"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
+    }).catch(() => {});
+  }, [room.id, queryClient]);
 
   useEffect(() => {
     if (!user) return;
@@ -103,6 +115,9 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         if (data.type === "history" && data.messages) {
           setMessages(data.messages);
           setTimeout(scrollBottom, 50);
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "mark_read" }));
+          }
         } else if (data.type === "new_message" && data.message) {
           setMessages((prev) => [...prev, data.message]);
           setTimeout(scrollBottom, 50);
@@ -249,8 +264,13 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
           <div key={r.id} onClick={() => onSelect(r)}
             className="flex items-center gap-3 px-4 py-3 border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
             data-testid={`room-${r.id}`}>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
               {r.querent_name?.charAt(0) ?? "?"}
+              {(r.unread_count ?? 0) > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center" data-testid={`badge-unread-room-${r.id}`}>
+                  {r.unread_count}
+                </span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{r.querent_name}</div>
@@ -697,11 +717,21 @@ export default function AdvisorApp() {
   const [tab, setTab] = useState<"chat" | "querents" | "profile" | "bank">("chat");
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
+  const queryClient = useQueryClient();
+
   const { data: rooms } = useQuery<Room[]>({
     queryKey: ["/api/my_rooms"],
     enabled: !!user,
     refetchInterval: 10000,
   });
+
+  const { data: unreadData } = useQuery<{ unread_count: number }>({
+    queryKey: ["/api/unread_count"],
+    enabled: !!user,
+    refetchInterval: 10000,
+  });
+
+  const totalUnread = unreadData?.unread_count ?? 0;
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "2")) {
@@ -764,7 +794,14 @@ export default function AdvisorApp() {
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] transition-colors ${
               tab === key ? "text-fuchsia-400" : "text-white/40 hover:text-white/60"
             }`}>
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {key === "chat" && totalUnread > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1" data-testid="badge-unread-total">
+                  {totalUnread}
+                </span>
+              )}
+            </div>
             {label}
           </button>
         ))}

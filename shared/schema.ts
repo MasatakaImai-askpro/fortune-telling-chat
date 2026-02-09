@@ -15,7 +15,7 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
   name: varchar("name", { length: 20 }).notNull(),
   headline: varchar("headline", { length: 30 }).notNull(),
   intro: text("intro").notNull(),
-  rank: varchar("rank", { length: 8 }).notNull().default("SILVER"),
+  rank: varchar("rank", { length: 20 }).notNull().default("BRONZE"),
   profileImage: text("profile_image").notNull().default(""),
   iconImage: text("icon_image").notNull().default(""),
   isRecommended: boolean("is_recommended").notNull().default(false),
@@ -71,6 +71,8 @@ export const messages = pgTable("messages", {
   category: varchar("category", { length: 20 }).notNull().default("free"),
   costPt: integer("cost_pt"),
   isLocked: boolean("is_locked").notNull().default(false),
+  isReadByQuerent: boolean("is_read_by_querent").notNull().default(false),
+  isReadByFortuneteller: boolean("is_read_by_fortuneteller").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

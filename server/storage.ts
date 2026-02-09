@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, ne, count } from "drizzle-orm";
 import { lte } from "drizzle-orm";
 import {
   users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions, transferRequests,
@@ -58,6 +58,11 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   deleteUser(id: number): Promise<void>;
   updateUser(id: number, data: Partial<{ email: string; role: string }>): Promise<User | undefined>;
+
+  getFortuneteller6MonthRevenue(fortunetellerId: number): Promise<number>;
+  getUnreadCountForRoom(roomId: string, role: "querent" | "fortuneteller"): Promise<number>;
+  markRoomRead(roomId: string, role: "querent" | "fortuneteller"): Promise<void>;
+  getTotalUnreadCount(userId: number, role: "querent" | "fortuneteller"): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -252,6 +257,78 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
     return updated;
   }
+
+  async getFortuneteller6MonthRevenue(fortunetellerId: number): Promise<number> {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${messages.costPt}), 0)`,
+    })
+      .from(messages)
+      .innerJoin(rooms, eq(messages.roomId, rooms.id))
+      .where(
+        and(
+          eq(rooms.fortunetellerId, fortunetellerId),
+          eq(messages.sender, "fortuneteller"),
+          gte(messages.createdAt, sixMonthsAgo)
+        )
+      );
+    return Number(result[0]?.total || 0);
+  }
+
+  async getUnreadCountForRoom(roomId: string, role: "querent" | "fortuneteller"): Promise<number> {
+    const col = role === "querent" ? messages.isReadByQuerent : messages.isReadByFortuneteller;
+    const senderFilter = role === "querent" ? "fortuneteller" : "querent";
+    const result = await db.select({ cnt: count() })
+      .from(messages)
+      .where(and(eq(messages.roomId, roomId), eq(col, false), eq(messages.sender, senderFilter)));
+    return Number(result[0]?.cnt || 0);
+  }
+
+  async markRoomRead(roomId: string, role: "querent" | "fortuneteller"): Promise<void> {
+    const senderFilter = role === "querent" ? "fortuneteller" : "querent";
+    if (role === "querent") {
+      await db.update(messages)
+        .set({ isReadByQuerent: true })
+        .where(and(eq(messages.roomId, roomId), eq(messages.sender, senderFilter), eq(messages.isReadByQuerent, false)));
+    } else {
+      await db.update(messages)
+        .set({ isReadByFortuneteller: true })
+        .where(and(eq(messages.roomId, roomId), eq(messages.sender, senderFilter), eq(messages.isReadByFortuneteller, false)));
+    }
+  }
+
+  async getTotalUnreadCount(userId: number, role: "querent" | "fortuneteller"): Promise<number> {
+    const col = role === "querent" ? messages.isReadByQuerent : messages.isReadByFortuneteller;
+    const senderFilter = role === "querent" ? "fortuneteller" : "querent";
+    const roomCol = role === "querent" ? rooms.querentId : rooms.fortunetellerId;
+    const result = await db.select({ cnt: count() })
+      .from(messages)
+      .innerJoin(rooms, eq(messages.roomId, rooms.id))
+      .where(and(eq(roomCol, userId), eq(col, false), eq(messages.sender, senderFilter)));
+    return Number(result[0]?.cnt || 0);
+  }
 }
 
 export const storage = new DatabaseStorage();
+
+export const RANK_THRESHOLDS = [
+  { rank: "DIAMOND_PLUS", label: "ダイヤモンド+", minRevenue: 2000000, cashable: 1000000 },
+  { rank: "DIAMOND", label: "ダイヤモンド", minRevenue: 1000000, cashable: 500000 },
+  { rank: "PLATINUM_PLUS", label: "プラチナ+", minRevenue: 500000, cashable: 250000 },
+  { rank: "PLATINUM", label: "プラチナ", minRevenue: 250000, cashable: 125000 },
+  { rank: "GOLD", label: "ゴールド", minRevenue: 160000, cashable: 80000 },
+  { rank: "SILVER", label: "シルバー", minRevenue: 80000, cashable: 40000 },
+  { rank: "BRONZE", label: "ブロンズ", minRevenue: 0, cashable: 0 },
+];
+
+export function computeRankFromRevenue(revenue: number): { rank: string; label: string; cashable: number } {
+  for (const tier of RANK_THRESHOLDS) {
+    if (revenue >= tier.minRevenue) {
+      const cashableRate = tier.minRevenue > 0 ? tier.cashable / tier.minRevenue : 0;
+      const cashable = Math.floor(revenue * cashableRate);
+      return { rank: tier.rank, label: tier.label, cashable };
+    }
+  }
+  return { rank: "BRONZE", label: "ブロンズ", cashable: 0 };
+}

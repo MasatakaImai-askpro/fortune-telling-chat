@@ -1,5 +1,5 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import { storage } from "./storage";
+import { storage, computeRankFromRevenue, RANK_THRESHOLDS } from "./storage";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 
@@ -127,17 +127,22 @@ export function registerRoutes(app: Express) {
   app.get("/api/get_fortuneteller_profiles", async (_req: Request, res: Response) => {
     try {
       const profiles = await storage.getAllFortunetellerProfiles();
-      const list = profiles.map((p) => ({
-        user_id: p.userId,
-        name: p.name,
-        rank: p.rank,
-        profile_image: p.profileImage,
-        icon_image: p.iconImage,
-        headline: p.headline,
-        intro: p.intro,
-        is_recommended: p.isRecommended,
-        style: p.style,
-        divination_methods: p.divinationMethods,
+      const list = await Promise.all(profiles.map(async (p) => {
+        const revenue = await storage.getFortuneteller6MonthRevenue(p.userId);
+        const rankInfo = computeRankFromRevenue(revenue);
+        return {
+          user_id: p.userId,
+          name: p.name,
+          rank: rankInfo.rank,
+          rank_label: rankInfo.label,
+          profile_image: p.profileImage,
+          icon_image: p.iconImage,
+          headline: p.headline,
+          intro: p.intro,
+          is_recommended: p.isRecommended,
+          style: p.style,
+          divination_methods: p.divinationMethods,
+        };
       }));
       res.json(list);
     } catch (e: any) {
@@ -151,10 +156,13 @@ export function registerRoutes(app: Express) {
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
       const profile = await storage.getFortunetellerProfile(user.id);
       if (!profile) return res.status(404).json({ error: "プロフィールが見つかりません" });
+      const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
+      const rankInfo = computeRankFromRevenue(revenue);
       res.json({
         user_id: user.id,
         name: profile.name,
-        rank: profile.rank,
+        rank: rankInfo.rank,
+        rank_label: rankInfo.label,
         headline: profile.headline,
         intro: profile.intro,
         profile_image: profile.profileImage,
@@ -243,17 +251,23 @@ export function registerRoutes(app: Express) {
         roomList = await storage.getRoomsByQuerent(user.id);
       }
 
+      const role = user.role === "2" ? "fortuneteller" : "querent";
       const result = [];
       for (const room of roomList) {
         const querent = await storage.getQuerentProfile(room.querentId);
+        const ft = await storage.getFortunetellerProfile(room.fortunetellerId);
         const msgs = await storage.getMessagesByRoom(room.id);
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+        const unreadCount = await storage.getUnreadCountForRoom(room.id, role as "querent" | "fortuneteller");
         result.push({
           id: room.id,
           querent_id: room.querentId,
+          fortuneteller_id: room.fortunetellerId,
           querent_name: querent?.name || "不明",
+          fortuneteller_name: ft?.name || "不明",
           last_message: lastMsg?.text || "",
           last_at: lastMsg?.createdAt.toISOString() || room.createdAt.toISOString(),
+          unread_count: unreadCount,
         });
       }
       result.sort((a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime());
@@ -276,6 +290,60 @@ export function registerRoutes(app: Express) {
         text,
       });
       res.status(201).json({ message: "送信しました", room_id: room.id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/rooms/:id/mark_read", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ error: "認証エラー" });
+      const roomId = req.params.id as string;
+      const room = await storage.getRoom(roomId);
+      if (!room) return res.status(404).json({ error: "ルームが見つかりません" });
+      if (room.querentId !== user.id && room.fortunetellerId !== user.id) {
+        return res.status(403).json({ error: "権限がありません" });
+      }
+      const role: "querent" | "fortuneteller" = user.role === "2" ? "fortuneteller" : "querent";
+      await storage.markRoomRead(roomId, role);
+      res.json({ message: "既読にしました" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/unread_count", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ error: "認証エラー" });
+      const role = user.role === "2" ? "fortuneteller" : "querent";
+      const count = await storage.getTotalUnreadCount(user.id, role as "querent" | "fortuneteller");
+      res.json({ unread_count: count });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/my_rank_summary", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
+      const rankInfo = computeRankFromRevenue(revenue);
+      await storage.updateFortunetellerProfile(user.id, { rank: rankInfo.rank });
+      res.json({
+        total_revenue: revenue,
+        rank: rankInfo.rank,
+        rank_label: rankInfo.label,
+        cashable_points: rankInfo.cashable,
+        thresholds: RANK_THRESHOLDS.map((t) => ({
+          rank: t.rank,
+          label: t.label,
+          min_revenue: t.minRevenue,
+          cashable: t.cashable,
+        })),
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -475,22 +543,27 @@ export function registerRoutes(app: Express) {
   app.get("/api/get_fortuneteller_all", async (_req: Request, res: Response) => {
     try {
       const profiles = await storage.getAllFortunetellerProfiles();
-      const list = profiles.map((p) => ({
-        id: p.userId,
-        user_id: p.userId,
-        name: p.name,
-        rank: p.rank,
-        profile_image: p.profileImage,
-        icon_image: p.iconImage,
-        headline: p.headline,
-        intro: p.intro,
-        is_recommended: p.isRecommended,
-        style: p.style,
-        divination_methods: p.divinationMethods,
-        regular_holidays: p.regularHolidays,
-        business_hours: p.businessHours,
-        long_intro: p.longIntro,
-        tags: [p.headline].filter(Boolean),
+      const list = await Promise.all(profiles.map(async (p) => {
+        const revenue = await storage.getFortuneteller6MonthRevenue(p.userId);
+        const rankInfo = computeRankFromRevenue(revenue);
+        return {
+          id: p.userId,
+          user_id: p.userId,
+          name: p.name,
+          rank: rankInfo.rank,
+          rank_label: rankInfo.label,
+          profile_image: p.profileImage,
+          icon_image: p.iconImage,
+          headline: p.headline,
+          intro: p.intro,
+          is_recommended: p.isRecommended,
+          style: p.style,
+          divination_methods: p.divinationMethods,
+          regular_holidays: p.regularHolidays,
+          business_hours: p.businessHours,
+          long_intro: p.longIntro,
+          tags: [p.headline].filter(Boolean),
+        };
       }));
       res.json(list);
     } catch (e: any) {
@@ -574,18 +647,23 @@ export function registerRoutes(app: Express) {
   app.get("/api/admin/ranking", requireAdmin, async (_req: Request, res: Response) => {
     try {
       const profiles = await storage.getAllFortunetellerProfiles();
-      const sorted = profiles
-        .sort((a, b) => {
-          const rankOrder: Record<string, number> = { PLATINUM: 3, GOLD: 2, SILVER: 1 };
-          return (rankOrder[b.rank] || 0) - (rankOrder[a.rank] || 0);
-        })
+      const withRevenue = await Promise.all(profiles.map(async (p) => {
+        const revenue = await storage.getFortuneteller6MonthRevenue(p.userId);
+        const rankInfo = computeRankFromRevenue(revenue);
+        return { ...p, revenue, computedRank: rankInfo.rank, rankLabel: rankInfo.label, cashable: rankInfo.cashable };
+      }));
+      const sorted = withRevenue
+        .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10)
         .map((p, i) => ({
           rank_position: i + 1,
           user_id: p.userId,
           name: p.name,
           headline: p.headline,
-          rank: p.rank,
+          rank: p.computedRank,
+          rank_label: p.rankLabel,
+          revenue: p.revenue,
+          cashable: p.cashable,
           is_recommended: p.isRecommended,
           style: p.style,
         }));
@@ -597,7 +675,6 @@ export function registerRoutes(app: Express) {
 
   const adminRankingSchema = z.object({
     is_recommended: z.boolean().optional(),
-    rank: z.enum(["SILVER", "GOLD", "PLATINUM"]).optional(),
   });
 
   app.patch("/api/admin/ranking/:userId", requireAdmin, async (req: Request, res: Response) => {
@@ -607,7 +684,6 @@ export function registerRoutes(app: Express) {
       if (!parsed.success) return res.status(400).json({ error: "入力が不正です" });
       const data: any = {};
       if (parsed.data.is_recommended !== undefined) data.isRecommended = parsed.data.is_recommended;
-      if (parsed.data.rank) data.rank = parsed.data.rank;
       const updated = await storage.updateFortunetellerProfile(userId, data);
       if (!updated) return res.status(404).json({ error: "占い師が見つかりません" });
       res.json({ message: "更新しました", profile: updated });
@@ -665,9 +741,17 @@ export function registerRoutes(app: Express) {
       const ftMap = new Map(ftProfiles.map((p) => [p.userId, p]));
       const qMap = new Map(qProfiles.map((p) => [p.userId, p]));
 
-      const list = allUsers.map((u) => {
+      const list = await Promise.all(allUsers.map(async (u) => {
         const ft = ftMap.get(u.id);
         const q = qMap.get(u.id);
+        let rank = null;
+        let rankLabel = null;
+        if (ft) {
+          const revenue = await storage.getFortuneteller6MonthRevenue(u.id);
+          const rankInfo = computeRankFromRevenue(revenue);
+          rank = rankInfo.rank;
+          rankLabel = rankInfo.label;
+        }
         return {
           id: u.id,
           email: u.email,
@@ -675,11 +759,12 @@ export function registerRoutes(app: Express) {
           role_label: u.role === "1" ? "相談者" : u.role === "2" ? "占い師" : u.role === "9" ? "管理者" : "不明",
           created_at: u.createdAt.toISOString(),
           profile_name: ft?.name || q?.name || null,
-          rank: ft?.rank || null,
+          rank,
+          rank_label: rankLabel,
           points: q?.points ?? null,
           is_subscription: q?.isSubscription ?? null,
         };
-      });
+      }));
       res.json(list);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -689,7 +774,6 @@ export function registerRoutes(app: Express) {
   const adminUserUpdateSchema = z.object({
     email: z.string().email().optional(),
     profile_name: z.string().max(100).optional(),
-    rank: z.enum(["SILVER", "GOLD", "PLATINUM"]).optional(),
     points: z.number().int().min(0).optional(),
     is_subscription: z.boolean().optional(),
   });
@@ -702,13 +786,12 @@ export function registerRoutes(app: Express) {
 
       const parsed = adminUserUpdateSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "入力が不正です" });
-      const { email, profile_name, rank, points, is_subscription } = parsed.data;
+      const { email, profile_name, points, is_subscription } = parsed.data;
       if (email) await storage.updateUser(id, { email });
 
       if (user.role === "2") {
         const data: any = {};
         if (profile_name) data.name = profile_name;
-        if (rank && ["SILVER", "GOLD", "PLATINUM"].includes(rank)) data.rank = rank;
         if (Object.keys(data).length > 0) await storage.updateFortunetellerProfile(id, data);
       }
 
