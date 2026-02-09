@@ -51,6 +51,8 @@ export interface IStorage {
   cancelSubscription(querentId: number): Promise<void>;
 
   getAllTransferRequests(): Promise<TransferRequest[]>;
+  getTransferRequestsByFortuneTeller(fortunetellerId: number): Promise<TransferRequest[]>;
+  getFortunetellerWithdrawnTotal(fortunetellerId: number): Promise<number>;
   createTransferRequest(req: InsertTransferRequest): Promise<TransferRequest>;
   approveTransferRequest(id: number, scheduledDate: Date): Promise<TransferRequest | undefined>;
   markTransferredRequests(): Promise<number>;
@@ -227,6 +229,21 @@ export class DatabaseStorage implements IStorage {
 
   async getAllTransferRequests(): Promise<TransferRequest[]> {
     return db.select().from(transferRequests).orderBy(desc(transferRequests.requestedAt));
+  }
+
+  async getTransferRequestsByFortuneTeller(fortunetellerId: number): Promise<TransferRequest[]> {
+    return db.select().from(transferRequests)
+      .where(eq(transferRequests.fortunetellerId, fortunetellerId))
+      .orderBy(desc(transferRequests.requestedAt));
+  }
+
+  async getFortunetellerWithdrawnTotal(fortunetellerId: number): Promise<number> {
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${transferRequests.amount}), 0)`,
+    })
+      .from(transferRequests)
+      .where(eq(transferRequests.fortunetellerId, fortunetellerId));
+    return Number(result[0]?.total || 0);
   }
 
   async createTransferRequest(req: InsertTransferRequest): Promise<TransferRequest> {

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle, Upload, AlertCircle } from "lucide-react";
+import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle, Upload, AlertCircle, Banknote, ArrowDownToLine } from "lucide-react";
 
 type Room = {
   id: string;
@@ -744,18 +744,49 @@ function QuerentListView() {
   );
 }
 
-function BankSettings() {
-  const { data: bank } = useQuery<BankInfo>({ queryKey: ["/api/my_bank_info"] });
+type CashableInfo = {
+  total_revenue: number;
+  rank: string;
+  rank_label: string;
+  total_cashable: number;
+  withdrawn: number;
+  available_points: number;
+  yen_amount: number;
+  transfer_fee: number;
+  net_amount: number;
+};
+
+type WithdrawalRecord = {
+  id: number;
+  amount: number;
+  yen_amount: number;
+  transfer_fee: number;
+  net_amount: number;
+  status: string;
+  requested_at: string;
+  approved_at: string | null;
+  scheduled_transfer_date: string | null;
+  transferred_at: string | null;
+};
+
+function WithdrawalTab() {
   const queryClient = useQueryClient();
+  const { data: bank } = useQuery<BankInfo>({ queryKey: ["/api/my_bank_info"] });
+  const { data: cashable } = useQuery<CashableInfo>({ queryKey: ["/api/my_cashable"] });
+  const { data: withdrawals } = useQuery<WithdrawalRecord[]>({ queryKey: ["/api/my_withdrawals"] });
+
   const [fields, setFields] = useState({ name: "", branch_name: "", account_type: "普通", account_number: "", account_holder_name: "" });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [applyError, setApplyError] = useState("");
 
   useEffect(() => {
     if (bank) setFields({ name: bank.name || "", branch_name: bank.branch_name || "", account_type: bank.account_type || "普通", account_number: bank.account_number || "", account_holder_name: bank.account_holder_name || "" });
   }, [bank]);
 
-  async function save() {
+  async function saveBank() {
     try {
       setSaving(true);
       await apiRequest("PATCH", "/api/my_bank_info", fields);
@@ -766,35 +797,164 @@ function BankSettings() {
     finally { setSaving(false); }
   }
 
+  async function applyWithdrawal() {
+    try {
+      setApplying(true);
+      setApplyError("");
+      await apiRequest("POST", "/api/apply_withdrawal", {});
+      queryClient.invalidateQueries({ queryKey: ["/api/my_cashable"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_withdrawals"] });
+      setShowConfirm(false);
+      alert("振込申請を受け付けました");
+    } catch (e: any) {
+      const msg = e?.message || "申請に失敗しました";
+      setApplyError(msg);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case "pending": return "申請中";
+      case "approved": return "承認済";
+      case "transferred": return "振込完了";
+      default: return s;
+    }
+  };
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case "pending": return "bg-yellow-100 text-yellow-700";
+      case "approved": return "bg-blue-100 text-blue-700";
+      case "transferred": return "bg-green-100 text-green-700";
+      default: return "bg-gray-100 text-gray-600";
+    }
+  };
+
+  const bankComplete = fields.name && fields.account_number && fields.account_holder_name;
+
   return (
-    <div className="p-4 space-y-4 pb-8">
-      <div className="text-sm font-bold text-gray-800" data-testid="text-bank-title">振込先口座設定</div>
-      {[
-        { label: "銀行名", key: "name" as const },
-        { label: "支店名", key: "branch_name" as const },
-        { label: "口座番号", key: "account_number" as const },
-        { label: "口座名義", key: "account_holder_name" as const },
-      ].map(({ label, key }) => (
-        <label key={key} className="block text-sm">
-          <span className="text-gray-600">{label}</span>
-          <input value={fields[key]} onChange={(e) => setFields((p) => ({ ...p, [key]: e.target.value }))}
-            data-testid={`input-bank-${key}`}
-            className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+    <div className="p-4 space-y-5 pb-8">
+      <div className="flex items-center gap-2 mb-1">
+        <ArrowDownToLine className="w-4 h-4 text-pink-600" />
+        <div className="text-sm font-bold text-gray-800" data-testid="text-withdrawal-title">振込申請</div>
+      </div>
+
+      {cashable && (
+        <div className="rounded-xl border border-pink-200 bg-pink-50 p-4 space-y-3" data-testid="section-cashable">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">ランク</span>
+            <span className="text-sm font-bold text-pink-600" data-testid="text-rank">{cashable.rank_label}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">申請可能ポイント</span>
+            <span className="text-lg font-bold text-gray-900" data-testid="text-available-points">{cashable.available_points.toLocaleString()} pt</span>
+          </div>
+          <div className="border-t border-pink-200 pt-3 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">換算額 ({cashable.available_points.toLocaleString()} pt x 1.5円)</span>
+              <span className="text-gray-700" data-testid="text-yen-amount">{cashable.yen_amount.toLocaleString()}円</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">振込手数料</span>
+              <span className="text-red-500" data-testid="text-transfer-fee">-{cashable.transfer_fee.toLocaleString()}円</span>
+            </div>
+            <div className="flex items-center justify-between text-sm font-bold border-t border-pink-200 pt-2">
+              <span className="text-gray-700">振込額</span>
+              <span className="text-pink-600" data-testid="text-net-amount">{cashable.net_amount.toLocaleString()}円</span>
+            </div>
+          </div>
+
+          {!showConfirm ? (
+            <button
+              onClick={() => { setShowConfirm(true); setApplyError(""); }}
+              disabled={cashable.available_points <= 0 || cashable.net_amount <= 0 || !bankComplete}
+              data-testid="button-apply-withdrawal"
+              className="w-full py-2.5 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {!bankComplete ? "口座情報を先に保存してください" : cashable.available_points <= 0 ? "申請可能なポイントがありません" : "全ポイントを振込申請する"}
+            </button>
+          ) : (
+            <div className="space-y-2 rounded-xl border border-pink-300 bg-white p-3">
+              <div className="text-xs text-gray-700 text-center">
+                <span className="font-bold">{cashable.available_points.toLocaleString()} pt</span> を申請します。<br />
+                振込額: <span className="font-bold text-pink-600">{cashable.net_amount.toLocaleString()}円</span> (手数料1,000円差引)
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  data-testid="button-cancel-withdrawal"
+                  className="flex-1 py-2 rounded-xl border border-pink-200 text-gray-600 text-sm hover:bg-pink-50 transition-colors"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={applyWithdrawal}
+                  disabled={applying}
+                  data-testid="button-confirm-withdrawal"
+                  className="flex-1 py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50"
+                >
+                  {applying ? "申請中..." : "申請する"}
+                </button>
+              </div>
+              {applyError && <div className="text-xs text-red-500 text-center" data-testid="text-apply-error">{applyError}</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-pink-200 bg-white p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <Banknote className="w-4 h-4 text-gray-600" />
+          <div className="text-sm font-bold text-gray-800" data-testid="text-bank-title">振込先口座</div>
+        </div>
+        {[
+          { label: "銀行名", key: "name" as const },
+          { label: "支店名", key: "branch_name" as const },
+          { label: "口座番号", key: "account_number" as const },
+          { label: "口座名義", key: "account_holder_name" as const },
+        ].map(({ label, key }) => (
+          <label key={key} className="block text-sm">
+            <span className="text-gray-600">{label}</span>
+            <input value={fields[key]} onChange={(e) => setFields((p) => ({ ...p, [key]: e.target.value }))}
+              data-testid={`input-bank-${key}`}
+              className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+          </label>
+        ))}
+        <label className="block text-sm">
+          <span className="text-gray-600">口座種別</span>
+          <select value={fields.account_type} onChange={(e) => setFields((p) => ({ ...p, account_type: e.target.value }))}
+            data-testid="select-bank-type"
+            className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+            <option value="普通">普通</option>
+            <option value="当座">当座</option>
+          </select>
         </label>
-      ))}
-      <label className="block text-sm">
-        <span className="text-gray-600">口座種別</span>
-        <select value={fields.account_type} onChange={(e) => setFields((p) => ({ ...p, account_type: e.target.value }))}
-          data-testid="select-bank-type"
-          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
-          <option value="普通">普通</option>
-          <option value="当座">当座</option>
-        </select>
-      </label>
-      <button onClick={save} disabled={saving} data-testid="button-save-bank"
-        className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50">
-        {saving ? "保存中..." : saved ? "保存しました" : "保存する"}
-      </button>
+        <button onClick={saveBank} disabled={saving} data-testid="button-save-bank"
+          className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50">
+          {saving ? "保存中..." : saved ? "保存しました" : "口座を保存する"}
+        </button>
+      </div>
+
+      {withdrawals && withdrawals.length > 0 && (
+        <div className="rounded-xl border border-pink-200 bg-white p-4 space-y-3">
+          <div className="text-sm font-bold text-gray-800" data-testid="text-history-title">申請履歴</div>
+          <div className="space-y-2">
+            {withdrawals.map((w) => (
+              <div key={w.id} className="flex items-center justify-between rounded-lg bg-pink-50 px-3 py-2 text-xs" data-testid={`withdrawal-${w.id}`}>
+                <div className="space-y-0.5">
+                  <div className="text-gray-700 font-medium">{w.amount.toLocaleString()} pt → {w.net_amount.toLocaleString()}円</div>
+                  <div className="text-gray-400">{new Date(w.requested_at).toLocaleDateString("ja-JP")}</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColor(w.status)}`} data-testid={`status-${w.id}`}>
+                  {statusLabel(w.status)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -866,7 +1026,7 @@ export default function AdvisorApp() {
         ) : tab === "profile" ? (
           <div className="flex-1 overflow-y-auto"><ProfileSettings /></div>
         ) : (
-          <div className="flex-1 overflow-y-auto"><BankSettings /></div>
+          <div className="flex-1 overflow-y-auto"><WithdrawalTab /></div>
         )}
       </div>
 
@@ -875,7 +1035,7 @@ export default function AdvisorApp() {
           { key: "chat" as const, icon: MessageCircle, label: "チャット" },
           { key: "querents" as const, icon: Users, label: "相談者一覧" },
           { key: "profile" as const, icon: Settings, label: "プロフィール" },
-          { key: "bank" as const, icon: CreditCard, label: "口座設定" },
+          { key: "bank" as const, icon: Banknote, label: "振込申請" },
         ]).map(({ key, icon: Icon, label }) => (
           <button key={key} onClick={() => { setTab(key); setSelectedRoom(null); }}
             data-testid={`tab-${key}`}

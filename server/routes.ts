@@ -350,6 +350,98 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  app.get("/api/my_cashable", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
+      const rankInfo = computeRankFromRevenue(revenue);
+      const withdrawn = await storage.getFortunetellerWithdrawnTotal(user.id);
+      const availablePoints = Math.max(0, rankInfo.cashable - withdrawn);
+      const yenAmount = Math.floor(availablePoints * 1.5);
+      const transferFee = 1000;
+      const netAmount = Math.max(0, yenAmount - transferFee);
+      res.json({
+        total_revenue: revenue,
+        rank: rankInfo.rank,
+        rank_label: rankInfo.label,
+        total_cashable: rankInfo.cashable,
+        withdrawn,
+        available_points: availablePoints,
+        yen_amount: yenAmount,
+        transfer_fee: transferFee,
+        net_amount: netAmount,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/apply_withdrawal", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const bank = await storage.getBankInfo(user.id);
+      if (!bank || !bank.name || !bank.accountNumber || !bank.accountHolderName) {
+        return res.status(400).json({ error: "振込先口座が未設定です。先に口座情報を保存してください。" });
+      }
+      const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
+      const rankInfo = computeRankFromRevenue(revenue);
+      const withdrawn = await storage.getFortunetellerWithdrawnTotal(user.id);
+      const availablePoints = Math.max(0, rankInfo.cashable - withdrawn);
+      if (availablePoints <= 0) {
+        return res.status(400).json({ error: "申請可能なポイントがありません" });
+      }
+      const yenAmount = Math.floor(availablePoints * 1.5);
+      const transferFee = 1000;
+      const netAmount = yenAmount - transferFee;
+      if (netAmount <= 0) {
+        return res.status(400).json({ error: "振込手数料を差し引くと振込額が0円以下になります" });
+      }
+      const request = await storage.createTransferRequest({
+        fortunetellerId: user.id,
+        amount: availablePoints,
+        status: "pending",
+      });
+      res.json({
+        message: "振込申請を受け付けました",
+        request: {
+          id: request.id,
+          amount: request.amount,
+          yen_amount: yenAmount,
+          transfer_fee: transferFee,
+          net_amount: netAmount,
+          status: request.status,
+          requested_at: request.requestedAt.toISOString(),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/my_withdrawals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const requests = await storage.getTransferRequestsByFortuneTeller(user.id);
+      res.json(requests.map((r) => ({
+        id: r.id,
+        amount: r.amount,
+        yen_amount: Math.floor(r.amount * 1.5),
+        transfer_fee: 1000,
+        net_amount: Math.floor(r.amount * 1.5) - 1000,
+        status: r.status,
+        requested_at: r.requestedAt.toISOString(),
+        approved_at: r.approvedAt?.toISOString() || null,
+        scheduled_transfer_date: r.scheduledTransferDate?.toISOString() || null,
+        transferred_at: r.transferredAt?.toISOString() || null,
+      })));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/my_rooms", requireAuth, async (req: Request, res: Response) => {
     try {
       const user = await storage.getUser(req.session.userId!);
