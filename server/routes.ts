@@ -856,8 +856,10 @@ export function registerRoutes(app: Express) {
         return { ...p, revenue, computedRank: rankInfo.rank, rankLabel: rankInfo.label, cashable: rankInfo.cashable };
       }));
       const sorted = withRevenue
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 10)
+        .sort((a, b) => {
+          if (a.isRecommended !== b.isRecommended) return a.isRecommended ? -1 : 1;
+          return b.revenue - a.revenue;
+        })
         .map((p, i) => ({
           rank_position: i + 1,
           user_id: p.userId,
@@ -869,6 +871,7 @@ export function registerRoutes(app: Express) {
           cashable: p.cashable,
           is_recommended: p.isRecommended,
           style: p.style,
+          icon_image: p.iconImage,
         }));
       res.json(sorted);
     } catch (e: any) {

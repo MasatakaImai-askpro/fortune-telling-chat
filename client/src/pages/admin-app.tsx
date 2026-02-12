@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Trophy, ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown } from "lucide-react";
+import { ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown, Sparkles, Search } from "lucide-react";
 
 type RankedAdvisor = {
   rank_position: number;
@@ -16,6 +16,7 @@ type RankedAdvisor = {
   cashable: number;
   is_recommended: boolean;
   style: string;
+  icon_image: string;
 };
 
 type TransferRequest = {
@@ -55,97 +56,89 @@ const statusColor: Record<string, string> = {
   transferred: "bg-emerald-100 text-emerald-700",
 };
 
-function RankingTab() {
+function RecommendTab() {
   const queryClient = useQueryClient();
-  const { data: ranking, isLoading } = useQuery<RankedAdvisor[]>({ queryKey: ["/api/admin/ranking"] });
-  const [editing, setEditing] = useState<number | null>(null);
-  const [editRecommended, setEditRecommended] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const { data: advisors, isLoading } = useQuery<RankedAdvisor[]>({ queryKey: ["/api/admin/ranking"] });
+  const [saving, setSaving] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  function startEdit(a: RankedAdvisor) {
-    setEditing(a.user_id);
-    setEditRecommended(a.is_recommended);
-  }
-
-  async function saveEdit(userId: number) {
-    setSaving(true);
+  async function toggleRecommended(userId: number, current: boolean) {
+    setSaving(userId);
     try {
       await apiRequest("PATCH", `/api/admin/ranking/${userId}`, {
-        is_recommended: editRecommended,
+        is_recommended: !current,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/ranking"] });
-      setEditing(null);
     } catch (e: any) {
       alert(e.message || "更新に失敗しました");
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   }
+
+  const filtered = useMemo(() => {
+    if (!advisors) return [];
+    if (!searchTerm.trim()) return advisors;
+    const q = searchTerm.toLowerCase();
+    return advisors.filter((a) => a.name.toLowerCase().includes(q) || a.headline.toLowerCase().includes(q));
+  }, [advisors, searchTerm]);
+
+  const recommendedCount = useMemo(() => (advisors ?? []).filter((a) => a.is_recommended).length, [advisors]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center text-gray-500">読み込み中...</div>;
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar">
-      <div className="px-4 py-3 border-b border-pink-200">
-        <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-ranking-title">
-          <Trophy className="w-5 h-5 text-amber-500" />
-          売上ランキング ベスト10
+      <div className="px-4 py-3 border-b border-pink-200 space-y-2">
+        <h2 className="text-base font-bold flex items-center gap-2" data-testid="text-recommend-title">
+          <Sparkles className="w-5 h-5 text-pink-600" />
+          おすすめ管理
         </h2>
-        <p className="text-[11px] text-gray-500 mt-1">過去6ヶ月の売上で自動算出。注目設定のみ管理できます。</p>
+        <p className="text-[11px] text-gray-500">相談者トップページに表示される「おすすめの占い師」を設定します。</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-gray-500">現在 <span className="font-bold text-pink-600" data-testid="text-recommend-count">{recommendedCount}</span> 名がおすすめ</span>
+        </div>
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="名前・ヘッドラインで検索"
+            data-testid="input-recommend-search"
+            className="w-full pl-9 pr-3 py-2 rounded-xl bg-pink-50 border border-pink-200 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none"
+          />
+        </div>
       </div>
       <div className="divide-y divide-pink-100">
-        {(ranking ?? []).map((a) => (
-          <div key={a.user_id} className="px-4 py-3" data-testid={`ranking-row-${a.user_id}`}>
-            {editing === a.user_id ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-amber-500 w-8">{a.rank_position}</span>
-                  <span className="text-sm font-semibold">{a.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] text-gray-600">注目:</label>
-                  <button onClick={() => setEditRecommended(!editRecommended)} data-testid="button-toggle-recommended"
-                    className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                      editRecommended ? "bg-amber-600 border-amber-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"
-                    }`}>
-                    {editRecommended ? "注目中" : "非注目"}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => saveEdit(a.user_id)} disabled={saving} data-testid="button-save-ranking"
-                    className="text-[11px] px-3 py-1 rounded-lg bg-emerald-600 text-white hover-elevate active-elevate-2 disabled:opacity-50">
-                    <Check className="w-3 h-3 inline mr-1" />保存
-                  </button>
-                  <button onClick={() => setEditing(null)} data-testid="button-cancel-ranking"
-                    className="text-[11px] px-3 py-1 rounded-lg bg-pink-50 text-gray-700 hover-elevate active-elevate-2">
-                    <X className="w-3 h-3 inline mr-1" />キャンセル
-                  </button>
-                </div>
-              </div>
+        {filtered.map((a) => (
+          <div key={a.user_id} className="px-4 py-3 flex items-center gap-3" data-testid={`recommend-row-${a.user_id}`}>
+            {a.icon_image ? (
+              <img src={a.icon_image} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
             ) : (
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-bold text-amber-500 w-8">{a.rank_position}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold">{a.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-800">{a.rank_label || rankLabel[a.rank] || a.rank}</span>
-                    {a.is_recommended && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
-                        <Star className="w-3 h-3 inline" /> 注目
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 truncate">{a.headline}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">
-                    売上: {a.revenue.toLocaleString()}pt / 換金可能: {a.cashable.toLocaleString()}pt
-                  </div>
-                </div>
-                <button onClick={() => startEdit(a)} data-testid={`button-edit-ranking-${a.user_id}`}
-                  className="text-gray-400 hover:text-gray-700 transition-colors p-1">
-                  <Edit2 className="w-4 h-4" />
-                </button>
+              <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-sm text-pink-400">{a.name.charAt(0)}</span>
               </div>
             )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">{a.name}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-pink-100 text-pink-800">{a.rank_label || rankLabel[a.rank] || a.rank}</span>
+              </div>
+              <div className="text-xs text-gray-500 truncate">{a.headline}</div>
+            </div>
+            <button
+              onClick={() => toggleRecommended(a.user_id, a.is_recommended)}
+              disabled={saving === a.user_id}
+              data-testid={`button-toggle-recommend-${a.user_id}`}
+              className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+                a.is_recommended
+                  ? "bg-pink-600 border-pink-500 text-white"
+                  : "bg-pink-50 border-pink-200 text-gray-500"
+              }`}
+            >
+              <Star className="w-3 h-3 inline mr-1" />
+              {a.is_recommended ? "おすすめ中" : "おすすめにする"}
+            </button>
           </div>
         ))}
       </div>
@@ -441,12 +434,12 @@ function UserManagementTab() {
   );
 }
 
-type Tab = "ranking" | "transfers" | "users";
+type Tab = "recommend" | "transfers" | "users";
 
 export default function AdminApp() {
   const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
-  const [tab, setTab] = useState<Tab>("ranking");
+  const [tab, setTab] = useState<Tab>("recommend");
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "9")) {
@@ -471,8 +464,8 @@ export default function AdminApp() {
     } catch {}
   }
 
-  const tabs: { key: Tab; label: string; icon: typeof Trophy }[] = [
-    { key: "ranking", label: "ランキング", icon: Trophy },
+  const tabs: { key: Tab; label: string; icon: typeof Sparkles }[] = [
+    { key: "recommend", label: "おすすめ", icon: Sparkles },
     { key: "transfers", label: "振込申請", icon: ArrowLeftRight },
     { key: "users", label: "ユーザー管理", icon: Users },
   ];
@@ -488,7 +481,7 @@ export default function AdminApp() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {tab === "ranking" && <RankingTab />}
+        {tab === "recommend" && <RecommendTab />}
         {tab === "transfers" && <TransfersTab />}
         {tab === "users" && <UserManagementTab />}
       </div>
