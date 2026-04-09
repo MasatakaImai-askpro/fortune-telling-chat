@@ -468,7 +468,9 @@ export function registerRoutes(app: Express) {
           fortuneteller_id: room.fortunetellerId,
           querent_name: querent?.name || "不明",
           fortuneteller_name: ft?.name || "不明",
-          last_message: lastMsg?.text || "",
+          fortuneteller_icon: ft?.iconImage || "",
+          last_message: lastMsg?.text || (lastMsg?.category === "treatment" ? "[施術メッセージ]" : ""),
+          last_message_sender: lastMsg?.sender || null,
           last_at: lastMsg?.createdAt.toISOString() || room.createdAt.toISOString(),
           unread_count: unreadCount,
         });
@@ -577,7 +579,13 @@ export function registerRoutes(app: Express) {
         birthtime: profile.birthtime,
         worry_category: profile.worryCategory,
         worry_message: profile.worryMessage,
+        partner_name: profile.partnerName || "",
+        partner_birthdate: profile.partnerBirthdate || "",
+        partner_zodiac_sign: profile.partnerZodiacSign || "",
+        partner_birthplace: profile.partnerBirthplace || "",
+        partner_birthtime: profile.partnerBirthtime || "",
         subscription: isSubActive,
+        subscription_plan_type: activeSub ? (activeSub as any).planType || "standard" : null,
         subscription_end_date: activeSub ? activeSub.endDate.toISOString() : null,
         point: profile.points,
       });
@@ -593,6 +601,11 @@ export function registerRoutes(app: Express) {
     birthtime: z.string().optional().default(""),
     worry_category: z.string().optional().default(""),
     worry_message: z.string().max(1000).optional().default(""),
+    partner_name: z.string().max(20).optional().default(""),
+    partner_birthdate: z.string().optional().default(""),
+    partner_zodiac_sign: z.string().optional().default(""),
+    partner_birthplace: z.string().optional().default(""),
+    partner_birthtime: z.string().optional().default(""),
   });
 
   app.post("/api/edit_querent_karte", requireAuth, async (req: Request, res: Response) => {
@@ -604,6 +617,9 @@ export function registerRoutes(app: Express) {
         birthdate: parsed.birthdate, zodiacSign: parsed.zodiac_sign,
         birthplace: parsed.birthplace, birthtime: parsed.birthtime,
         worryCategory: parsed.worry_category, worryMessage: parsed.worry_message,
+        partnerName: parsed.partner_name, partnerBirthdate: parsed.partner_birthdate,
+        partnerZodiacSign: parsed.partner_zodiac_sign, partnerBirthplace: parsed.partner_birthplace,
+        partnerBirthtime: parsed.partner_birthtime,
       });
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });
@@ -803,23 +819,28 @@ export function registerRoutes(app: Express) {
       const existing = await storage.getActiveSubscription(user.id);
       if (existing) return res.status(400).json({ error: "既にサブスクリプション契約中です" });
 
+      const planType = req.body.plan_type === "premium" ? "premium" : "standard";
+      const amount = planType === "premium" ? 50000 : 20000;
+
       const now = new Date();
       const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       const sub = await storage.createSubscription({
         querentId: user.id,
-        amount: 20000,
+        amount,
+        planType,
         status: "active",
         startDate: now,
         endDate,
-      });
+      } as any);
 
       await storage.updateQuerentProfile(user.id, { isSubscription: true });
 
       res.status(201).json({
-        message: "サブスクリプションを開始しました（20,000円/30日）",
+        message: `サブスクリプションを開始しました（${amount.toLocaleString()}円/30日）`,
         subscription: {
           id: sub.id,
           amount: sub.amount,
+          plan_type: planType,
           start_date: sub.startDate.toISOString(),
           end_date: sub.endDate.toISOString(),
           status: sub.status,

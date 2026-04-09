@@ -84,6 +84,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [treatmentTitle, setTreatmentTitle] = useState("");
+  const [treatmentPt, setTreatmentPt] = useState<number>(1000);
   const [connected, setConnected] = useState(false);
   const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "treatment">("free");
   const [inputError, setInputError] = useState("");
@@ -146,7 +147,23 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   }
 
   function sendMessage() {
-    if (!input.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (msgCategory === "treatment") {
+      if (treatmentPt <= 0) return;
+      const payload: any = {
+        type: "chat_message",
+        sender: "fortuneteller",
+        text: null,
+        category: "treatment",
+        title: treatmentTitle.trim() || null,
+        cost_pt: treatmentPt,
+      };
+      wsRef.current.send(JSON.stringify(payload));
+      setTreatmentTitle("");
+      setTreatmentPt(1000);
+      return;
+    }
+    if (!input.trim()) return;
     if (!isValidJapaneseText(input.trim())) {
       setInputError("全角ひらがな・カタカナ・漢字のみ入力可能です");
       return;
@@ -157,16 +174,10 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
       text: input.trim(),
       category: msgCategory,
     };
-    if (msgCategory === "treatment") {
-      payload.title = treatmentTitle.trim() || null;
-    }
     wsRef.current.send(JSON.stringify(payload));
     setInput("");
-    setTreatmentTitle("");
     setInputError("");
   }
-
-  const treatmentCost = msgCategory === "treatment" ? input.trim().length * 10 : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -225,30 +236,46 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
             </button>
           ))}
         </div>
-        {msgCategory === "treatment" && (
-          <div className="px-3 pt-2 space-y-1">
+        {msgCategory === "treatment" ? (
+          <div className="px-3 pt-2 pb-3 space-y-2">
             <input type="text" value={treatmentTitle} onChange={(e) => handleTitleChange(e.target.value)} data-testid="input-treatment-title"
-              placeholder="施術タイトル" maxLength={100}
+              placeholder="施術タイトル（任意）" maxLength={100}
               className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
-            {input.trim().length > 0 && (
-              <div className="text-[11px] text-amber-600" data-testid="text-treatment-cost">
-                自動計算: {input.trim().length}文字 x 10円 = <b>{treatmentCost.toLocaleString()}円（{treatmentCost}pt）</b>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[500, 1000, 2000, 3000, 5000, 10000].map((pt) => (
+                <button key={pt} onClick={() => setTreatmentPt(pt)} data-testid={`button-treatment-pt-${pt}`}
+                  className={`rounded-xl py-1.5 text-xs font-semibold border transition-colors ${treatmentPt === pt ? "bg-amber-500 border-amber-400 text-white" : "bg-pink-50 border-pink-200 text-gray-700 hover:bg-amber-50"}`}>
+                  {pt.toLocaleString()}pt
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] text-amber-600 font-semibold" data-testid="text-treatment-cost">
+                施術金額: <b>{treatmentPt.toLocaleString()}pt</b>
               </div>
-            )}
+              <button onClick={sendMessage} data-testid="button-ft-send-treatment"
+                disabled={treatmentPt <= 0}
+                className="rounded-xl px-4 py-1.5 text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors flex items-center gap-1.5">
+                <Send className="w-3 h-3" /> 施術を送信
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            {inputError && <div className="text-[10px] text-red-600 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
+            <div className="flex items-center gap-2 p-3">
+              <input type="text" value={input} onChange={(e) => handleInputChange(e.target.value)} data-testid="input-ft-message"
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                placeholder="メッセージを入力..."
+                className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+              <button onClick={sendMessage} data-testid="button-ft-send"
+                disabled={!!inputError || !input.trim()}
+                className="w-9 h-9 rounded-full bg-pink-600 flex items-center justify-center transition-colors disabled:opacity-50 hover-elevate active-elevate-2">
+                <Send className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          </>
         )}
-        {inputError && <div className="text-[10px] text-red-600 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
-        <div className="flex items-center gap-2 p-3">
-          <input type="text" value={input} onChange={(e) => handleInputChange(e.target.value)} data-testid="input-ft-message"
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-            placeholder={msgCategory === "treatment" ? "施術の本文を入力..." : "メッセージを入力..."}
-            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
-          <button onClick={sendMessage} data-testid="button-ft-send"
-            disabled={!!inputError || !input.trim()}
-            className="w-9 h-9 rounded-full bg-pink-600 flex items-center justify-center transition-colors disabled:opacity-50 hover-elevate active-elevate-2">
-            <Send className="w-4 h-4 text-white" />
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -292,7 +319,7 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
 }
 
 const STYLE_OPTIONS = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
-const METHOD_OPTIONS = ["手相", "タロット", "四柱推命", "占星術", "九星気学"];
+const METHOD_OPTIONS = ["タロット・オラクルカード", "四柱推命", "霊視・霊聴・オーラ", "手相", "占星術", "九星気学", "チャネリング", "ツインレイ鑑定", "カウンセリング", "その他"];
 
 function ProfileSettings() {
   const { user } = useAuth();
@@ -418,39 +445,20 @@ function ProfileSettings() {
       <div className="text-sm font-bold text-gray-800" data-testid="text-settings-title">プロフィール設定</div>
       <div className="space-y-2">
         <span className="text-gray-600 text-sm flex items-center gap-1.5"><Image className="w-3.5 h-3.5" />バナー画像</span>
-        <div className="text-[10px] text-gray-400">推奨: 横長（16:9〜2:1）/ 最大5MB / JPEG, PNG, WebP</div>
         {profileImage && <img src={profileImage} alt="" className="w-full h-24 object-cover rounded-xl border border-pink-200" data-testid="img-profile-banner-preview" />}
-        <input type="file" ref={bannerInputRef} accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner"); e.target.value = ""; }} />
-        <button type="button" onClick={() => bannerInputRef.current?.click()} disabled={uploadingBanner}
-          data-testid="button-upload-banner"
-          className="w-full py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs flex items-center justify-center gap-1.5 hover:bg-pink-100 transition-colors disabled:opacity-50">
-          <Upload className="w-3.5 h-3.5" />
-          {uploadingBanner ? "アップロード中..." : "バナー画像を選択"}
-        </button>
-        {bannerError && (
-          <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 flex items-start gap-1.5" data-testid="text-banner-error">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{bannerError}
-          </div>
-        )}
+        {!profileImage && <div className="w-full h-24 rounded-xl border border-pink-200 bg-pink-50 flex items-center justify-center text-xs text-gray-400">バナー未設定</div>}
+        <div className="text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+          <span>🔒</span> 画像は管理者のみ変更可能です
+        </div>
       </div>
       <div className="space-y-2">
         <span className="text-gray-600 text-sm flex items-center gap-1.5"><UserCircle className="w-3.5 h-3.5" />アイコン画像</span>
-        <div className="text-[10px] text-gray-400">推奨: 正方形（1:1）/ 最大2MB / JPEG, PNG, WebP</div>
-        {iconImage && <img src={iconImage} alt="" className="w-14 h-14 object-cover rounded-full border border-pink-200" data-testid="img-profile-icon-preview" />}
-        <input type="file" ref={iconInputRef} accept="image/jpeg,image/png,image/webp,image/gif" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "icon"); e.target.value = ""; }} />
-        <button type="button" onClick={() => iconInputRef.current?.click()} disabled={uploadingIcon}
-          data-testid="button-upload-icon"
-          className="w-full py-2 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 text-xs flex items-center justify-center gap-1.5 hover:bg-pink-100 transition-colors disabled:opacity-50">
-          <Upload className="w-3.5 h-3.5" />
-          {uploadingIcon ? "アップロード中..." : "アイコン画像を選択"}
-        </button>
-        {iconError && (
-          <div className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1.5 flex items-start gap-1.5" data-testid="text-icon-error">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{iconError}
-          </div>
-        )}
+        {iconImage
+          ? <img src={iconImage} alt="" className="w-14 h-14 object-cover rounded-full border border-pink-200" data-testid="img-profile-icon-preview" />
+          : <div className="w-14 h-14 rounded-full border border-pink-200 bg-pink-50 flex items-center justify-center text-xs text-gray-400">未設定</div>}
+        <div className="text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+          <span>🔒</span> 画像は管理者のみ変更可能です
+        </div>
       </div>
       <label className="block text-sm">
         <span className="text-gray-600">占い師名</span>

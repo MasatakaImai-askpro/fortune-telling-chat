@@ -123,3 +123,10 @@ client/
 - 2026-02-09: Fortuneteller earns 2000pt bonus when first responding to a subscriber in a room with no fortuneteller messages in past 30 days. Stored in messages.bonus_pt column (separate from costPt). Revenue calculation includes bonusPt. Fortuneteller sees alert notification on bonus earned.
 - 2026-02-09: Updated querent free message templates to 6 options: ご依頼よろしくお願いします / 鑑定お願いできますか？ / 施術をお願いできますか？ / 前回の続きからよろしくお願します / はい / 相談ありがとうございました
 - 2026-02-09: Replaced 口座設定 tab with 振込申請 (withdrawal application) tab in fortuneteller dashboard. Features: bank account form (save), withdrawal application with full breakdown (1pt=1.5yen, floor decimals, -1000 yen fee), all-points-only withdrawal, points deducted upon application, application history with status badges. New APIs: GET /api/my_cashable, POST /api/apply_withdrawal, GET /api/my_withdrawals. Available points = cashable (from rank) - sum(past withdrawals).
+- 2026-04-09: LINE-style chat room list in querent top.tsx: shows advisor icon, bold unread messages, time labels, "あなた: " prefix for querent's own last message. Chat header simplified (profile card removed, shows worry category summary instead). ※ footnote removed.
+- 2026-04-09: Two subscription tiers: standard (¥20,000/30d, Platinum and below, 2000pt/advisor) and premium (¥50,000/30d, any rank, 2000pt for ≤Platinum, 5000pt for Platinum+). Subscription UI shows active plan name/type, buttons for each plan.
+- 2026-04-09: Point purchase 6 tiers in account tab: ¥500/¥1,000/¥3,000/¥5,000/¥10,000/¥30,000 (3-column grid).
+- 2026-04-09: Karte split into two sections (自分の情報 / お相手の情報) with partner fields: name, birthdate, zodiac_sign, birthplace, birthtime. Auto-saves on change.
+- 2026-04-09: Treatment messages in advisor-app.tsx: removed text input, replaced with 6 point amount buttons (500/1000/2000/3000/5000/10000pt) + send button. No body text for treatment messages.
+- 2026-04-09: Advisor profile: removed image upload buttons, replaced with read-only display and "管理者のみ変更可能" notice.
+- 2026-04-09: Divination methods expanded to 10 options: タロット・オラクルカード, 四柱推命, 霊視・霊聴・オーラ, 手相, 占星術, 九星気学, チャネリング, ツインレイ鑑定, カウンセリング, その他.

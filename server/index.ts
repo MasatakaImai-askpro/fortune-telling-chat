@@ -167,7 +167,7 @@ wss.on("connection", async (ws, req) => {
 
       if (data.type !== "chat_message") return;
 
-      const { sender, text, category, title, free: isFree } = data;
+      const { sender, text, category, title, free: isFree, cost_pt: directCostPt } = data;
       let roomId = client.roomId;
 
       if (!roomId && client.fortunetellerId) {
@@ -187,11 +187,11 @@ wss.on("connection", async (ws, req) => {
       let subscriptionBonus = 0;
       if (sender === "fortuneteller") {
         if (category === "length_paying") {
-          costPt = text.length * 2;
+          costPt = (text || "").length * 2;
           isLocked = true;
           msgCategory = "length_paying";
         } else if (category === "treatment") {
-          costPt = text.length * 10;
+          costPt = parseInt(directCostPt) || 0;
           isLocked = true;
           msgCategory = "treatment";
         }

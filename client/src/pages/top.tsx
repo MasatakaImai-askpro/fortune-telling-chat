@@ -107,7 +107,13 @@ type QuerentInfo = {
   birthtime: string;
   worry_category: string;
   worry_message: string;
+  partner_name: string;
+  partner_birthdate: string;
+  partner_zodiac_sign: string;
+  partner_birthplace: string;
+  partner_birthtime: string;
   subscription: boolean;
+  subscription_plan_type: string | null;
   subscription_end_date: string | null;
   point: number;
 };
@@ -410,7 +416,9 @@ type RoomInfo = {
   fortuneteller_name: string;
   fortuneteller_icon?: string;
   last_message?: string;
+  last_message_sender?: string | null;
   last_message_at?: string;
+  last_at?: string;
   unread_count: number;
 };
 
@@ -423,29 +431,52 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
   if (isLoading) return <div className="text-gray-500 text-center py-8">読み込み中...</div>;
   if (rooms.length === 0) return <div className="text-center text-gray-400 text-sm py-8">まだ相談履歴がありません。占い師を選んで相談を始めましょう。</div>;
 
+  const dateLabel = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString("ja-JP", { month: "short", day: "numeric" });
+  };
+
   return (
-    <div className="space-y-2">
-      <h3 className="font-semibold text-gray-900 text-sm">相談履歴</h3>
-      {rooms.map((room) => (
-        <button key={room.id} onClick={() => onSelectAdvisor(room.fortuneteller_id)}
-          className="w-full text-left bg-white border border-pink-200 rounded-2xl p-3 flex items-center gap-3"
-          data-testid={`button-room-${room.id}`}>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
-            {room.fortuneteller_icon ? <img src={room.fortuneteller_icon} alt="" className="w-full h-full rounded-full object-cover" /> : (room.fortuneteller_name || "?").charAt(0)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm truncate text-gray-900">{room.fortuneteller_name}</span>
-              {room.unread_count > 0 && (
-                <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none flex-shrink-0"
-                  data-testid={`badge-unread-room-${room.id}`}>{room.unread_count > 99 ? "99+" : room.unread_count}</span>
+    <div className="bg-white rounded-2xl border border-pink-200 overflow-hidden">
+      {rooms.map((room, idx) => {
+        const isFromAdvisor = room.last_message_sender === "fortuneteller";
+        const hasUnread = (room.unread_count ?? 0) > 0;
+        const lastAt = room.last_at || room.last_message_at;
+        return (
+          <button key={room.id} onClick={() => onSelectAdvisor(room.fortuneteller_id)}
+            className={cls("w-full text-left flex items-center gap-3 px-4 py-3 transition-colors hover:bg-pink-50 active:bg-pink-100", idx < rooms.length - 1 ? "border-b border-pink-100" : "")}
+            data-testid={`button-room-${room.id}`}>
+            <div className="relative w-12 h-12 rounded-full flex-shrink-0 bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white">
+              {room.fortuneteller_icon
+                ? <img src={room.fortuneteller_icon} alt="" className="w-full h-full rounded-full object-cover" />
+                : <span>{(room.fortuneteller_name || "?").charAt(0)}</span>}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-semibold text-sm text-gray-900 truncate">{room.fortuneteller_name}</span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {lastAt && <span className="text-[10px] text-gray-400">{dateLabel(lastAt)}</span>}
+                  {hasUnread && (
+                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                      data-testid={`badge-unread-room-${room.id}`}>{room.unread_count > 99 ? "99+" : room.unread_count}</span>
+                  )}
+                </div>
+              </div>
+              {room.last_message ? (
+                <p className={cls("text-xs truncate mt-0.5", hasUnread ? "font-semibold text-gray-800" : "text-gray-500")}>
+                  {isFromAdvisor ? "" : "あなた: "}{room.last_message}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-0.5 italic">まだメッセージはありません</p>
               )}
             </div>
-            {room.last_message && <p className="text-xs text-gray-500 truncate mt-0.5">{room.last_message}</p>}
-          </div>
-          {room.last_message_at && <span className="text-[10px] text-gray-400 flex-shrink-0">{timefmt(room.last_message_at)}</span>}
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -648,15 +679,14 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           </div>
           <button className="ml-auto text-xs font-semibold rounded-xl px-3 py-1 bg-pink-50 border border-pink-200 text-gray-700" onClick={onBack} data-testid="button-back-to-list">一覧へ</button>
         </div>
-        <div className="mt-2 mb-2 border-t border-pink-200 pt-2">
-          <div className="rounded-2xl overflow-hidden border border-pink-200">
-            {advisor.profile_image && <img src={advisor.profile_image} className="w-full h-28 object-cover" alt="" />}
-            <div className="p-3">
-              <div className="text-sm font-semibold text-gray-900">{advisor.headline}</div>
-              <p className="text-xs text-gray-700 mt-1 whitespace-pre-wrap">{truncate(advisor.intro, 150)}</p>
-            </div>
+        {querentInfo?.worry_category && (
+          <div className="mt-1 mb-1 px-1">
+            <p className="text-[11px] text-gray-500 truncate">
+              <span className="font-semibold text-pink-600">{querentInfo.worry_category}</span>
+              {querentInfo.worry_message ? `：${truncate(querentInfo.worry_message, 40)}` : ""}
+            </p>
           </div>
-        </div>
+        )}
       </div>
       <div ref={scrollRef} className="mt-3 space-y-3 max-h-[50vh] overflow-y-auto">
         {messages.length === 0 ? (
@@ -698,11 +728,6 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
         )}
       </div>
       <div className="fixed bottom-[56px] left-0 right-0 z-20 pb-[env(safe-area-inset-bottom)] px-4">
-        {plan === "points" && (
-          <div className="text-right mb-1 text-[11px] text-gray-500">
-            ※ 1pt={YEN_PER_POINT}円 相当。あなたの占い師は <b>{getRankInfo(advisor.rank).jp}</b>（<b>1文字={getRankInfo(advisor.rank).mult}pt</b>）です。
-          </div>
-        )}
         {uploads.length > 0 && (
           <div className="mb-2 flex gap-2 overflow-x-auto">
             {uploads.map((u, idx) => (
@@ -846,10 +871,10 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     finally { setSubmitting(false); }
   }
 
-  async function handleSubscribe() {
+  async function handleSubscribe(planType: "standard" | "premium") {
     try {
       setSubLoading(true); setSubMsg(null);
-      await apiRequest("POST", "/api/subscribe", {});
+      await apiRequest("POST", "/api/subscribe", { plan_type: planType });
       queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
       setSubMsg("サブスクリプションを開始しました");
     } catch (e: any) {
@@ -872,7 +897,11 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     if (!queInfo) return;
     try {
       await apiRequest("POST", "/api/edit_querent_karte", {
-        birthdate: queInfo.birthdate, zodiac_sign: queInfo.zodiac_sign, birthplace: queInfo.birthplace, birthtime: queInfo.birthtime, worry_category: queInfo.worry_category, worry_message: queInfo.worry_message,
+        birthdate: queInfo.birthdate, zodiac_sign: queInfo.zodiac_sign, birthplace: queInfo.birthplace, birthtime: queInfo.birthtime,
+        worry_category: queInfo.worry_category, worry_message: queInfo.worry_message,
+        partner_name: queInfo.partner_name, partner_birthdate: queInfo.partner_birthdate,
+        partner_zodiac_sign: queInfo.partner_zodiac_sign, partner_birthplace: queInfo.partner_birthplace,
+        partner_birthtime: queInfo.partner_birthtime,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
     } catch (e) { console.error("カルテ保存失敗", e); }
@@ -882,7 +911,8 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     if (tab !== "karte" || !queInfo) return;
     const timer = setTimeout(handleSaveKarte, 1000);
     return () => clearTimeout(timer);
-  }, [queInfo?.birthdate, queInfo?.zodiac_sign, queInfo?.birthplace, queInfo?.birthtime, queInfo?.worry_category, queInfo?.worry_message]);
+  }, [queInfo?.birthdate, queInfo?.zodiac_sign, queInfo?.birthplace, queInfo?.birthtime, queInfo?.worry_category, queInfo?.worry_message,
+      queInfo?.partner_name, queInfo?.partner_birthdate, queInfo?.partner_zodiac_sign, queInfo?.partner_birthplace, queInfo?.partner_birthtime]);
 
   if (!queInfo) return <div className="text-gray-500 text-center py-8">プロフィール情報を読み込み中...</div>;
 
@@ -906,51 +936,81 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               {subMsg}
             </div>
           )}
-          <div className={cls("border rounded-2xl p-4", queInfo.subscription ? "bg-emerald-50 border-emerald-300" : "bg-white border-pink-200")}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Sparkles className="w-4 h-4 text-pink-600" />
-              <span className="font-semibold text-gray-900">月額サブスクコース</span>
-              {queInfo.subscription && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">契約中</span>}
-            </div>
-            <div className="mt-2 text-2xl font-bold text-gray-900">20,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
-            <div className="mt-2 text-sm text-gray-600">全ての操作が定額内。ポイント消費なしで相談し放題。</div>
-            <ul className="mt-2 space-y-1 text-sm text-gray-500">
-              <li className="flex items-center gap-2"><span className="text-emerald-600">&#10003;</span> チャット送信時のポイント消費なし</li>
-              <li className="flex items-center gap-2"><span className="text-emerald-600">&#10003;</span> 全ランクの占い師に定額で相談可能</li>
-              <li className="flex items-center gap-2"><span className="text-emerald-600">&#10003;</span> 30日間の有効期間</li>
-            </ul>
-            {queInfo.subscription && queInfo.subscription_end_date && (
-              <div className="mt-3 text-xs text-gray-500 bg-pink-50 rounded-lg px-3 py-2" data-testid="text-sub-end-date">
-                有効期限: <b className="text-gray-900">{new Date(queInfo.subscription_end_date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</b>
-                <span className="ml-2">
-                  (残り{Math.max(0, Math.ceil((new Date(queInfo.subscription_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}日)
+
+          {queInfo.subscription && queInfo.subscription_end_date && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-2xl px-4 py-3" data-testid="text-sub-active-banner">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span className="font-semibold text-emerald-800">
+                  {queInfo.subscription_plan_type === "premium" ? "プレミアムプラン契約中" : "スタンダードプラン契約中"}
                 </span>
               </div>
-            )}
-            <div className="mt-3">
-              {queInfo.subscription ? (
-                <button onClick={handleCancelSubscription} disabled={subLoading} data-testid="button-cancel-subscription"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold bg-pink-50 border border-pink-200 text-gray-700 hover:bg-pink-100 disabled:opacity-50 transition-colors">
-                  {subLoading ? "処理中..." : "解約する"}
-                </button>
-              ) : (
-                <button onClick={handleSubscribe} disabled={subLoading} data-testid="button-subscribe"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 disabled:opacity-50 transition-colors">
-                  {subLoading ? "処理中..." : "このプランに申し込む（20,000円/30日）"}
-                </button>
-              )}
+              <div className="mt-1 text-xs text-gray-600" data-testid="text-sub-end-date">
+                有効期限: <b className="text-gray-900">{new Date(queInfo.subscription_end_date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</b>
+                <span className="ml-2">（残り{Math.max(0, Math.ceil((new Date(queInfo.subscription_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}日）</span>
+              </div>
+              <button onClick={handleCancelSubscription} disabled={subLoading} data-testid="button-cancel-subscription"
+                className="mt-2 rounded-xl px-4 py-1.5 text-xs font-semibold bg-white border border-pink-200 text-gray-700 hover:bg-pink-50 disabled:opacity-50 transition-colors">
+                {subLoading ? "処理中..." : "解約する"}
+              </button>
             </div>
-          </div>
-          <div className={cls("border rounded-2xl p-4", !queInfo.subscription ? "bg-white border-pink-200" : "bg-white border-pink-200")}>
+          )}
+
+          {!queInfo.subscription && (
+            <>
+              <div className="border rounded-2xl p-4 bg-white border-pink-200">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Sparkles className="w-4 h-4 text-pink-500" />
+                  <span className="font-bold text-gray-900">スタンダードコース</span>
+                  <span className="text-[10px] bg-pink-100 text-pink-700 border border-pink-300 px-2 py-0.5 rounded-full">①</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-gray-900">20,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
+                <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナランクまでの占い師を<b>5人まで</b>登録可能</li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>占い師へのポイント分配: <b>2,000pt/月 × 1人</b></li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
+                </ul>
+                <button onClick={() => handleSubscribe("standard")} disabled={subLoading} data-testid="button-subscribe-standard"
+                  className="mt-3 w-full rounded-xl py-2 text-sm font-semibold bg-gradient-to-r from-pink-500 to-pink-600 text-white hover:from-pink-600 hover:to-pink-700 disabled:opacity-50 transition-colors">
+                  {subLoading ? "処理中..." : "このプランに申し込む"}
+                </button>
+              </div>
+
+              <div className="border rounded-2xl p-4 bg-white border-purple-200">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  <span className="font-bold text-gray-900">プレミアムコース</span>
+                  <span className="text-[10px] bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full">②</span>
+                </div>
+                <div className="mt-2 text-2xl font-bold text-gray-900">50,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
+                <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>ランク問わず占い師を<b>5人まで</b>登録可能</li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナまで: <b>2,000pt/月 × 1人</b></li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナ+以上: <b>5,000pt/月 × 1人</b></li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
+                </ul>
+                <button onClick={() => handleSubscribe("premium")} disabled={subLoading} data-testid="button-subscribe-premium"
+                  className="mt-3 w-full rounded-xl py-2 text-sm font-semibold bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 disabled:opacity-50 transition-colors">
+                  {subLoading ? "処理中..." : "このプランに申し込む"}
+                </button>
+              </div>
+            </>
+          )}
+
+          <div className="border rounded-2xl p-4 bg-white border-pink-200">
             <div className="font-semibold text-gray-900">ポイント制</div>
-            <div className="text-sm text-gray-600">1pt={YEN_PER_POINT}円。文字数xランク倍率で消費。</div>
-            <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <div className="text-sm text-gray-600">1pt={YEN_PER_POINT}円。文字数×ランク倍率で消費。</div>
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
               <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
             </div>
             {!queInfo.subscription && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-pink-600 text-white" data-testid="button-buy-1000">1000pt購入(約{yen(1000)})</button>
-                <button className="rounded-xl px-4 py-2 text-sm font-semibold bg-pink-600 text-white" data-testid="button-buy-3000">3000pt購入(約{yen(3000)})</button>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {[{ yen: 500, pt: Math.floor(500 / YEN_PER_POINT) }, { yen: 1000, pt: Math.floor(1000 / YEN_PER_POINT) }, { yen: 3000, pt: Math.floor(3000 / YEN_PER_POINT) }, { yen: 5000, pt: Math.floor(5000 / YEN_PER_POINT) }, { yen: 10000, pt: Math.floor(10000 / YEN_PER_POINT) }, { yen: 30000, pt: Math.floor(30000 / YEN_PER_POINT) }].map((opt) => (
+                  <button key={opt.yen} className="rounded-xl px-2 py-2 text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 transition-colors" data-testid={`button-buy-${opt.yen}`}>
+                    <div>{opt.yen.toLocaleString()}円</div>
+                    <div className="text-[10px] opacity-80">{opt.pt.toLocaleString()}pt</div>
+                  </button>
+                ))}
               </div>
             )}
             {queInfo.subscription && (
@@ -983,18 +1043,32 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
       )}
 
       {tab === "karte" && (
-        <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">カルテ</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <Input label="生年月日" value={queInfo.birthdate} onChange={(v) => setQueInfo({ ...queInfo, birthdate: v })} placeholder="YYYY-MM-DD" />
-            <Input label="星座" value={queInfo.zodiac_sign} onChange={(v) => setQueInfo({ ...queInfo, zodiac_sign: v })} placeholder="例: しし座" />
-            <Input label="出生地" value={queInfo.birthplace} onChange={(v) => setQueInfo({ ...queInfo, birthplace: v })} />
-            <Input label="出生時間" value={queInfo.birthtime} onChange={(v) => setQueInfo({ ...queInfo, birthtime: v })} placeholder="例: 14:30" />
+        <div className="space-y-4">
+          <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">ご自身の情報</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <Input label="生年月日" value={queInfo.birthdate} onChange={(v) => setQueInfo({ ...queInfo, birthdate: v })} placeholder="YYYY-MM-DD" />
+              <Input label="星座" value={queInfo.zodiac_sign} onChange={(v) => setQueInfo({ ...queInfo, zodiac_sign: v })} placeholder="例: しし座" />
+              <Input label="出生地" value={queInfo.birthplace} onChange={(v) => setQueInfo({ ...queInfo, birthplace: v })} />
+              <Input label="出生時間" value={queInfo.birthtime} onChange={(v) => setQueInfo({ ...queInfo, birthtime: v })} placeholder="例: 14:30" />
+            </div>
+            <Select label="お悩みジャンル" value={queInfo.worry_category} onChange={(v) => setQueInfo({ ...queInfo, worry_category: v })} options={SAMPLE_GENRES} />
+            <Textarea label="お悩み内容 (1000文字以内)" value={queInfo.worry_message}
+              onChange={(v) => { if (v.length <= 1000) setQueInfo({ ...queInfo, worry_message: v }); }}
+              hint={`${(queInfo.worry_message || "").length}/1000`} />
           </div>
-          <Select label="お悩みジャンル" value={queInfo.worry_category} onChange={(v) => setQueInfo({ ...queInfo, worry_category: v })} options={SAMPLE_GENRES} />
-          <Textarea label="お悩み内容 (1000文字以内)" value={queInfo.worry_message}
-            onChange={(v) => { if (v.length <= 1000) setQueInfo({ ...queInfo, worry_message: v }); }}
-            hint={`${(queInfo.worry_message || "").length}/1000`} />
+          <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">お相手の情報</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Input label="お相手のお名前" value={queInfo.partner_name || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_name: v })} placeholder="例: 田中太郎" />
+              </div>
+              <Input label="お相手の生年月日" value={queInfo.partner_birthdate || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_birthdate: v })} placeholder="YYYY-MM-DD" />
+              <Input label="お相手の星座" value={queInfo.partner_zodiac_sign || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_zodiac_sign: v })} placeholder="例: みずがめ座" />
+              <Input label="お相手の出生地" value={queInfo.partner_birthplace || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_birthplace: v })} />
+              <Input label="お相手の出生時間" value={queInfo.partner_birthtime || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_birthtime: v })} placeholder="例: 09:15" />
+            </div>
+          </div>
           <div className="text-right text-xs text-gray-500">保存は自動です</div>
         </div>
       )}
