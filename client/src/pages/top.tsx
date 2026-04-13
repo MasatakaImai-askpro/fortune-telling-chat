@@ -19,10 +19,9 @@ const RANK_TABLE: Record<string, { key: string; jp: string; mult: number; color:
 };
 const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.BRONZE;
 
-const SAMPLE_GENRES = ["恋愛", "仕事", "人間関係", "金運", "健康"];
+const SAMPLE_GENRES = ["恋愛", "結婚", "復縁", "禁断の恋", "家族", "仕事", "財運", "カウンセリング"];
 
 const FREE_TEMPLATES = [
-  "ご依頼よろしくお願いします",
   "鑑定お願いできますか？",
   "施術をお願いできますか？",
   "前回の続きからよろしくお願します",
@@ -42,12 +41,15 @@ const timefmt = (iso: string) => {
 const genreColor = (g: string) => {
   const map: Record<string, { on: string; off: string }> = {
     "恋愛": { on: "bg-pink-100 border-pink-400 text-pink-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "結婚": { on: "bg-rose-100 border-rose-400 text-rose-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "復縁": { on: "bg-fuchsia-100 border-fuchsia-400 text-fuchsia-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "禁断の恋": { on: "bg-red-100 border-red-400 text-red-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "家族": { on: "bg-orange-100 border-orange-400 text-orange-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
     "仕事": { on: "bg-blue-100 border-blue-400 text-blue-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
-    "人間関係": { on: "bg-green-100 border-green-400 text-green-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
-    "金運": { on: "bg-amber-100 border-amber-400 text-amber-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
-    "健康": { on: "bg-teal-100 border-teal-400 text-teal-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "財運": { on: "bg-amber-100 border-amber-400 text-amber-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
+    "カウンセリング": { on: "bg-teal-100 border-teal-400 text-teal-700", off: "bg-pink-50 border-pink-200 text-gray-500" },
   };
-  return map[g] || map["恋愛"];
+  return map[g] || { on: "bg-pink-100 border-pink-400 text-pink-700", off: "bg-pink-50 border-pink-200 text-gray-500" };
 };
 
 const storage = {
@@ -874,9 +876,13 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
   async function handleSubscribe(planType: "standard" | "premium") {
     try {
       setSubLoading(true); setSubMsg(null);
-      await apiRequest("POST", "/api/subscribe", { plan_type: planType });
-      queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
-      setSubMsg("サブスクリプションを開始しました");
+      const res = await apiRequest("POST", "/api/stripe/create_checkout", { plan_type: planType });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setSubMsg(data.error || "支払いページへの移動に失敗しました");
+      }
     } catch (e: any) {
       setSubMsg(e?.message || "契約に失敗しました");
     } finally { setSubLoading(false); }

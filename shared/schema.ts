@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, uuid, unique, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, uuid, unique, varchar, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 100 }).notNull().unique(),
   password: text("password").notNull(),
   role: varchar("role", { length: 1 }).notNull(),
+  lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -104,6 +105,24 @@ export const transferRequests = pgTable("transfer_requests", {
   transferredAt: timestamp("transferred_at"),
 });
 
+export const advisorMenus = pgTable("advisor_menus", {
+  id: serial("id").primaryKey(),
+  fortunetellerId: integer("fortuneteller_id").notNull().references(() => fortunetellerProfiles.userId, { onDelete: "cascade" }),
+  menuType: varchar("menu_type", { length: 20 }).notNull().default("treatment"),
+  name: varchar("name", { length: 50 }).notNull(),
+  requiredPt: integer("required_pt").notNull().default(0),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const advisorTemplates = pgTable("advisor_templates", {
+  id: serial("id").primaryKey(),
+  fortunetellerId: integer("fortuneteller_id").notNull().references(() => fortunetellerProfiles.userId, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -112,6 +131,14 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const insertAdvisorMenuSchema = createInsertSchema(advisorMenus).omit({ id: true, createdAt: true });
+export const insertAdvisorTemplateSchema = createInsertSchema(advisorTemplates).omit({ id: true, createdAt: true });
+
+export type AdvisorMenu = typeof advisorMenus.$inferSelect;
+export type InsertAdvisorMenu = z.infer<typeof insertAdvisorMenuSchema>;
+export type AdvisorTemplate = typeof advisorTemplates.$inferSelect;
+export type InsertAdvisorTemplate = z.infer<typeof insertAdvisorTemplateSchema>;
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertFortunetellerProfileSchema = createInsertSchema(fortunetellerProfiles).omit({ createdAt: true });

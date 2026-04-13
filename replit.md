@@ -130,3 +130,6 @@ client/
 - 2026-04-09: Treatment messages in advisor-app.tsx: removed text input, replaced with 6 point amount buttons (500/1000/2000/3000/5000/10000pt) + send button. No body text for treatment messages.
 - 2026-04-09: Advisor profile: removed image upload buttons, replaced with read-only display and "管理者のみ変更可能" notice.
 - 2026-04-09: Divination methods expanded to 10 options: タロット・オラクルカード, 四柱推命, 霊視・霊聴・オーラ, 手相, 占星術, 九星気学, チャネリング, ツインレイ鑑定, カウンセリング, その他.
+- 2026-04-13: Advisor dashboard profile tab now has 3 sub-tabs: プロフィール / メニュー / テンプレート. MenuSettings and TemplateSettings integrated into ProfileTabView component.
+- 2026-04-13: Admin dashboard now has 4th tab: 画像管理 (ImageManagementTab). Admins can select any fortuneteller and upload/change their icon (1:1, 2MB) or banner (16:9-2:1, 5MB) images via /api/admin/fortunetellers/:userId/upload_image. Uses /api/admin/fortunetellers list endpoint.
+- 2026-04-13: Unlock notification popup: when a querent unlocks a treatment message, WebSocket broadcasts "message_unlocked" event to the room. Fortuneteller's ChatView shows an amber toast notification with the earned pt amount for 3 seconds. registerRoutes() now accepts optional broadcast callback injected from index.ts.

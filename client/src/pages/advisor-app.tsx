@@ -88,6 +88,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const [connected, setConnected] = useState(false);
   const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "treatment">("free");
   const [inputError, setInputError] = useState("");
+  const [unlockNotification, setUnlockNotification] = useState<number | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -125,6 +126,10 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
             alert(`サブスク会員への初回対応ボーナス: +${data.message.subscription_bonus}pt を獲得しました！`);
           }
           setTimeout(scrollBottom, 50);
+        } else if (data.type === "message_unlocked") {
+          setMessages((prev) => prev.map((m) => m.id === data.message_id ? { ...m, is_locked: false } : m));
+          setUnlockNotification(data.cost_pt ?? 0);
+          setTimeout(() => setUnlockNotification(null), 3000);
         }
       } catch {}
     };
@@ -180,7 +185,12 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {unlockNotification !== null && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg animate-bounce">
+          🔓 相談者がメッセージをアンロックしました (+{unlockNotification}pt)
+        </div>
+      )}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-pink-200">
         <button onClick={onBack} className="text-gray-500 hover:text-gray-800" data-testid="button-back-rooms">
           <ChevronLeft className="w-5 h-5" />
@@ -318,7 +328,7 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
   );
 }
 
-const STYLE_OPTIONS = ["優しく回答", "じっくり聞きます", "即対応いたします", "リードします", "寄り添います", "明るく、元気に"];
+const STYLE_OPTIONS = ["優しく回答", "じっくり聞きます", "即対応いたします", "ハッキリ回答", "リードします", "寄り添います", "明るく、元気に"];
 const METHOD_OPTIONS = ["タロット・オラクルカード", "四柱推命", "霊視・霊聴・オーラ", "手相", "占星術", "九星気学", "チャネリング", "ツインレイ鑑定", "カウンセリング", "その他"];
 
 function ProfileSettings() {
@@ -539,26 +549,234 @@ function ProfileSettings() {
   );
 }
 
+type AdvisorMenu = { id: number; menu_type: "treatment" | "divination"; name: string; required_pt: number; sort_order: number };
+type AdvisorTemplate = { id: number; text: string; sort_order: number };
+
+function MenuSettings() {
+  const queryClient = useQueryClient();
+  const { data: menus = [], isLoading } = useQuery<AdvisorMenu[]>({ queryKey: ["/api/my_menus"] });
+  const [newType, setNewType] = useState<"treatment" | "divination">("treatment");
+  const [newName, setNewName] = useState("");
+  const [newPt, setNewPt] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPt, setEditPt] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function addMenu() {
+    if (!newName.trim() || !newPt) return;
+    setSaving(true);
+    try {
+      await apiRequest("POST", "/api/my_menus", { menu_type: newType, name: newName.trim(), required_pt: parseInt(newPt) });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_menus"] });
+      setNewName(""); setNewPt("");
+    } catch (e) { console.error(e); } finally { setSaving(false); }
+  }
+
+  async function saveEdit(id: number) {
+    setSaving(true);
+    try {
+      await apiRequest("PATCH", `/api/my_menus/${id}`, { name: editName.trim(), required_pt: parseInt(editPt) });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_menus"] });
+      setEditId(null);
+    } catch (e) { console.error(e); } finally { setSaving(false); }
+  }
+
+  async function deleteMenu(id: number) {
+    await apiRequest("DELETE", `/api/my_menus/${id}`, {});
+    queryClient.invalidateQueries({ queryKey: ["/api/my_menus"] });
+  }
+
+  if (isLoading) return <div className="text-gray-400 text-sm py-4">読み込み中...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm font-bold text-gray-800">メニュー設定</div>
+      <div className="bg-white border border-pink-200 rounded-2xl p-3 space-y-2">
+        <div className="text-xs text-gray-500">新しいメニューを追加</div>
+        <div className="flex gap-2">
+          <select value={newType} onChange={(e) => setNewType(e.target.value as any)}
+            className="rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-900 focus:outline-none">
+            <option value="treatment">施術</option>
+            <option value="divination">鑑定</option>
+          </select>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="メニュー名" maxLength={50}
+            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+          <input value={newPt} onChange={(e) => setNewPt(e.target.value.replace(/\D/g, ""))} placeholder="必要pt" maxLength={6}
+            className="w-20 rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+          <button onClick={addMenu} disabled={saving || !newName.trim() || !newPt}
+            className="rounded-xl px-3 py-1.5 text-xs font-semibold bg-pink-600 text-white disabled:opacity-50">追加</button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {["treatment", "divination"].map((type) => {
+          const typedMenus = menus.filter((m) => m.menu_type === type);
+          return (
+            <div key={type}>
+              <div className="text-xs font-semibold text-gray-600 mb-1">{type === "treatment" ? "🌟 施術メニュー" : "🔮 鑑定メニュー"}</div>
+              {typedMenus.length === 0 && <div className="text-xs text-gray-400 pl-2">メニューがありません</div>}
+              {typedMenus.map((m) => (
+                <div key={m.id} className="bg-white border border-pink-200 rounded-xl p-2.5 flex items-center gap-2 mb-1.5">
+                  {editId === m.id ? (
+                    <>
+                      <input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={50}
+                        className="flex-1 rounded-lg bg-pink-50 border border-pink-200 px-2 py-1 text-xs" />
+                      <input value={editPt} onChange={(e) => setEditPt(e.target.value.replace(/\D/g, ""))} maxLength={6}
+                        className="w-18 rounded-lg bg-pink-50 border border-pink-200 px-2 py-1 text-xs" />
+                      <button onClick={() => saveEdit(m.id)} className="text-xs px-2 py-1 rounded-lg bg-emerald-500 text-white">保存</button>
+                      <button onClick={() => setEditId(null)} className="text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700">取消</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-xs text-gray-900">{m.name}</span>
+                      <span className="text-xs text-pink-600 font-semibold">{m.required_pt.toLocaleString()}pt</span>
+                      <button onClick={() => { setEditId(m.id); setEditName(m.name); setEditPt(m.required_pt.toString()); }}
+                        className="text-[10px] px-2 py-1 rounded-lg bg-pink-50 border border-pink-200 text-gray-600">編集</button>
+                      <button onClick={() => deleteMenu(m.id)}
+                        className="text-[10px] px-2 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600">削除</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TemplateSettings() {
+  const queryClient = useQueryClient();
+  const { data: templates = [], isLoading } = useQuery<AdvisorTemplate[]>({ queryKey: ["/api/my_templates"] });
+  const [newText, setNewText] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function addTemplate() {
+    if (!newText.trim()) return;
+    setSaving(true);
+    try {
+      await apiRequest("POST", "/api/my_templates", { text: newText.trim() });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_templates"] });
+      setNewText("");
+    } catch (e: any) { alert(e.message || "追加に失敗しました"); } finally { setSaving(false); }
+  }
+
+  async function saveEdit(id: number) {
+    setSaving(true);
+    try {
+      await apiRequest("PATCH", `/api/my_templates/${id}`, { text: editText.trim() });
+      queryClient.invalidateQueries({ queryKey: ["/api/my_templates"] });
+      setEditId(null);
+    } catch (e) { console.error(e); } finally { setSaving(false); }
+  }
+
+  async function deleteTemplate(id: number) {
+    await apiRequest("DELETE", `/api/my_templates/${id}`, {});
+    queryClient.invalidateQueries({ queryKey: ["/api/my_templates"] });
+  }
+
+  async function moveUp(idx: number) {
+    if (idx === 0) return;
+    const newIds = templates.map((t) => t.id);
+    [newIds[idx - 1], newIds[idx]] = [newIds[idx], newIds[idx - 1]];
+    await apiRequest("POST", "/api/my_templates/reorder", { ids: newIds });
+    queryClient.invalidateQueries({ queryKey: ["/api/my_templates"] });
+  }
+
+  async function moveDown(idx: number) {
+    if (idx === templates.length - 1) return;
+    const newIds = templates.map((t) => t.id);
+    [newIds[idx], newIds[idx + 1]] = [newIds[idx + 1], newIds[idx]];
+    await apiRequest("POST", "/api/my_templates/reorder", { ids: newIds });
+    queryClient.invalidateQueries({ queryKey: ["/api/my_templates"] });
+  }
+
+  if (isLoading) return <div className="text-gray-400 text-sm py-4">読み込み中...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold text-gray-800">テンプレート管理</div>
+        <div className="text-xs text-gray-400">{templates.length}/100件</div>
+      </div>
+      <div className="bg-white border border-pink-200 rounded-2xl p-3 space-y-2">
+        <textarea value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="テンプレートのテキストを入力（最大500文字）" maxLength={500} rows={2}
+          className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-xs text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-pink-400" />
+        <button onClick={addTemplate} disabled={saving || !newText.trim() || templates.length >= 100}
+          className="w-full rounded-xl py-1.5 text-xs font-semibold bg-pink-600 text-white disabled:opacity-50">追加する</button>
+      </div>
+      <div className="space-y-1.5">
+        {templates.map((t, idx) => (
+          <div key={t.id} className="bg-white border border-pink-200 rounded-xl p-2.5 space-y-1.5">
+            {editId === t.id ? (
+              <div className="space-y-1.5">
+                <textarea value={editText} onChange={(e) => setEditText(e.target.value)} maxLength={500} rows={2}
+                  className="w-full rounded-lg bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs resize-none focus:outline-none" />
+                <div className="flex gap-1.5">
+                  <button onClick={() => saveEdit(t.id)} className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500 text-white">保存</button>
+                  <button onClick={() => setEditId(null)} className="text-xs px-2.5 py-1 rounded-lg bg-gray-200 text-gray-700">取消</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button onClick={() => moveUp(idx)} disabled={idx === 0} className="text-gray-400 disabled:opacity-30 hover:text-pink-600 text-[10px] leading-none">▲</button>
+                  <button onClick={() => moveDown(idx)} disabled={idx === templates.length - 1} className="text-gray-400 disabled:opacity-30 hover:text-pink-600 text-[10px] leading-none">▼</button>
+                </div>
+                <p className="flex-1 text-xs text-gray-800 leading-relaxed">{t.text}</p>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => { setEditId(t.id); setEditText(t.text); }}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-pink-50 border border-pink-200 text-gray-600">編集</button>
+                  <button onClick={() => deleteTemplate(t.id)}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600">削除</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {templates.length === 0 && <div className="text-xs text-gray-400 text-center py-4">テンプレートがありません</div>}
+      </div>
+    </div>
+  );
+}
+
 const worryCategoryLabel: Record<string, string> = {
   love: "恋愛", work: "仕事", money: "金運", health: "健康", human: "人間関係", other: "その他",
 };
 
+const QUERENT_FILTERS = [
+  { value: "all", label: "全員" },
+  { value: "new", label: "新規" },
+  { value: "revisit", label: "再訪問" },
+  { value: "past", label: "過去のお客様" },
+  { value: "dig", label: "掘り起こし" },
+  { value: "unread", label: "開封済み" },
+  { value: "login30", label: "ログイン30分以内" },
+  { value: "subscriber", label: "サブスク会員" },
+];
+
 function QuerentListView() {
   const queryClient = useQueryClient();
-  const { data: querents, isLoading } = useQuery<Querent[]>({ queryKey: ["/api/all_querents"] });
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const { data: querents, isLoading } = useQuery<Querent[]>({
+    queryKey: ["/api/all_querents", filterStatus],
+    queryFn: async () => {
+      const res = await fetch(`/api/all_querents?filter=${filterStatus}`, { credentials: "include" });
+      if (!res.ok) throw new Error("取得失敗");
+      return res.json();
+    },
+  });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [filterSubscription, setFilterSubscription] = useState<string>("all");
 
   const filtered = (querents ?? []).filter((q) => {
-    const matchSearch = !searchTerm || q.name.includes(searchTerm) || q.worry_message.includes(searchTerm);
-    const matchCategory = filterCategory === "all" || q.worry_category === filterCategory;
-    const matchSub = filterSubscription === "all" || (filterSubscription === "subscribed" ? q.is_subscription : !q.is_subscription);
-    return matchSearch && matchCategory && matchSub;
+    return !searchTerm || q.name.includes(searchTerm) || q.worry_message.includes(searchTerm);
   });
 
   function toggleSelect(userId: number) {
@@ -622,34 +840,19 @@ function QuerentListView() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {[{ value: "all", label: "全て" }, { value: "love", label: "恋愛" }, { value: "work", label: "仕事" }, { value: "money", label: "金運" }, { value: "health", label: "健康" }, { value: "human", label: "人間関係" }].map((c) => (
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1">
+          {QUERENT_FILTERS.map((f) => (
             <button
-              key={c.value}
-              onClick={() => setFilterCategory(c.value)}
-              data-testid={`filter-${c.value}`}
+              key={f.value}
+              onClick={() => { setFilterStatus(f.value); setSelected(new Set()); }}
+              data-testid={`filter-${f.value}`}
               className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
-                filterCategory === c.value
+                filterStatus === f.value
                   ? "bg-pink-600 border-pink-500 text-white"
                   : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
               }`}
             >
-              {c.label}
-            </button>
-          ))}
-          <span className="w-px h-4 bg-pink-200 mx-1 flex-shrink-0" />
-          {[{ value: "all", label: "全員" }, { value: "subscribed", label: "サブスク会員" }].map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setFilterSubscription(s.value)}
-              data-testid={`filter-sub-${s.value}`}
-              className={`text-[11px] px-2.5 py-1 rounded-lg border whitespace-nowrap transition-colors ${
-                filterSubscription === s.value
-                  ? "bg-amber-600 border-amber-500 text-white"
-                  : "bg-pink-50 border-pink-200 text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {s.label}
+              {f.label}
             </button>
           ))}
         </div>
@@ -967,6 +1170,31 @@ function WithdrawalTab() {
   );
 }
 
+function ProfileTabView() {
+  const [profileTab, setProfileTab] = useState<"profile" | "menus" | "templates">("profile");
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex gap-1 px-4 pt-3 pb-1">
+        {([
+          { id: "profile" as const, label: "プロフィール" },
+          { id: "menus" as const, label: "メニュー" },
+          { id: "templates" as const, label: "テンプレート" },
+        ]).map((t) => (
+          <button key={t.id} onClick={() => setProfileTab(t.id)}
+            className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${profileTab === t.id ? "bg-pink-600 border-pink-500 text-white" : "bg-pink-50 border-pink-200 text-gray-700"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pb-6">
+        {profileTab === "profile" && <ProfileSettings />}
+        {profileTab === "menus" && <MenuSettings />}
+        {profileTab === "templates" && <TemplateSettings />}
+      </div>
+    </div>
+  );
+}
+
 export default function AdvisorApp() {
   const { user, loading, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
@@ -1032,7 +1260,7 @@ export default function AdvisorApp() {
         ) : tab === "querents" ? (
           <QuerentListView />
         ) : tab === "profile" ? (
-          <div className="flex-1 overflow-y-auto"><ProfileSettings /></div>
+          <ProfileTabView />
         ) : (
           <div className="flex-1 overflow-y-auto"><WithdrawalTab /></div>
         )}

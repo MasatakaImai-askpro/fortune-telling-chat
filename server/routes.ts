@@ -39,7 +39,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-export function registerRoutes(app: Express) {
+export function registerRoutes(app: Express, broadcast?: (roomId: string, data: any) => void) {
   app.post("/api/user_login", async (req: Request, res: Response) => {
     try {
       const { email, password, role } = req.body;
@@ -58,6 +58,7 @@ export function registerRoutes(app: Express) {
         return res.status(401).json({ error: "ログイン画面が異なります。" });
       }
       req.session.userId = user.id;
+      await storage.updateUserLastLogin(user.id).catch(() => {});
       res.json({ message: "ログイン成功", user_role: user.role });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -669,18 +670,75 @@ export function registerRoutes(app: Express) {
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const filter = (req.query.filter as string) || "all";
+
       const profiles = await storage.getAllQuerentProfiles();
-      const list = profiles.map((p) => ({
-        user_id: p.userId,
-        name: p.name,
-        zodiac_sign: p.zodiacSign,
-        worry_category: p.worryCategory,
-        worry_message: p.worryMessage,
-        birthdate: p.birthdate,
-        points: p.points,
-        is_subscription: p.isSubscription,
+      const allUsers = await storage.getAllUsers();
+      const userMap = new Map(allUsers.map((u) => [u.id, u]));
+
+      const rooms = await storage.getRoomsByFortuneteller(user.id);
+      const roomMap = new Map(rooms.map((r) => [r.querentId, r]));
+
+      const now = new Date();
+      const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+      const list = await Promise.all(profiles.map(async (p) => {
+        const u = userMap.get(p.userId);
+        const room = roomMap.get(p.userId);
+        let lastMsgAt: Date | null = null;
+        let msgCount = 0;
+        let ftMsgCount = 0;
+        let hasUnread = false;
+
+        if (room) {
+          const msgs = await storage.getMessagesByRoom(room.id);
+          msgCount = msgs.filter((m) => m.sender === "querent").length;
+          ftMsgCount = msgs.filter((m) => m.sender === "fortuneteller").length;
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg) lastMsgAt = lastMsg.createdAt;
+          const unread = await storage.getUnreadCountForRoom(room.id, "fortuneteller");
+          hasUnread = unread > 0;
+        }
+
+        const isNew = room && msgCount > 0 && ftMsgCount === 0;
+        const isRevisit = room && ftMsgCount > 0 && lastMsgAt && (now.getTime() - lastMsgAt.getTime()) < 7 * 24 * 60 * 60 * 1000;
+        const isPast = room && msgCount > 0 && lastMsgAt && (now.getTime() - lastMsgAt.getTime()) > 30 * 24 * 60 * 60 * 1000;
+        const isDig = room && msgCount > 0 && lastMsgAt && (now.getTime() - lastMsgAt.getTime()) > 7 * 24 * 60 * 60 * 1000 && !isPast;
+        const loggedInRecent = u?.lastLoginAt && u.lastLoginAt > thirtyMinAgo;
+
+        const activeSub = await storage.getActiveSubscription(p.userId);
+        const isSubscriber = !!activeSub;
+
+        let include = true;
+        if (filter === "new") include = !!isNew;
+        else if (filter === "revisit") include = !!isRevisit;
+        else if (filter === "past") include = !!isPast;
+        else if (filter === "dig") include = !!isDig;
+        else if (filter === "unread") include = hasUnread;
+        else if (filter === "login30") include = !!loggedInRecent;
+        else if (filter === "subscriber") include = isSubscriber;
+
+        if (!include) return null;
+
+        return {
+          user_id: p.userId,
+          name: p.name,
+          zodiac_sign: p.zodiacSign,
+          worry_category: p.worryCategory,
+          worry_message: p.worryMessage,
+          birthdate: p.birthdate,
+          points: p.points,
+          is_subscription: isSubscriber,
+          last_login_at: u?.lastLoginAt?.toISOString() || null,
+          has_room: !!room,
+          is_new: !!isNew,
+          is_revisit: !!isRevisit,
+          has_unread: hasUnread,
+          logged_in_recent: !!loggedInRecent,
+        };
       }));
-      res.json(list);
+
+      res.json(list.filter(Boolean));
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -742,6 +800,14 @@ export function registerRoutes(app: Express) {
 
       const updated = await storage.unlockMessage(msg.id);
       if (!updated) return res.status(500).json({ error: "開封に失敗しました" });
+
+      if (broadcast) {
+        broadcast(String(msg.roomId), {
+          type: "message_unlocked",
+          message_id: String(msg.id),
+          cost_pt: cost,
+        });
+      }
 
       res.json({
         message: "施術メッセージを開封しました",
@@ -863,6 +929,197 @@ export function registerRoutes(app: Express) {
       res.json({ message: "サブスクリプションを解約しました" });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ---- Advisor Menus ----
+
+  app.get("/api/my_menus", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const menus = await storage.getAdvisorMenus(user.id);
+      res.json(menus.map((m) => ({ id: m.id, menu_type: m.menuType, name: m.name, required_pt: m.requiredPt, sort_order: m.sortOrder })));
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/my_menus", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const schema = z.object({ menu_type: z.enum(["treatment", "divination"]), name: z.string().min(1).max(50), required_pt: z.number().int().min(0) });
+      const parsed = schema.parse(req.body);
+      const existing = await storage.getAdvisorMenus(user.id);
+      const menu = await storage.createAdvisorMenu({ fortunetellerId: user.id, menuType: parsed.menu_type, name: parsed.name, requiredPt: parsed.required_pt, sortOrder: existing.length });
+      res.status(201).json({ id: menu.id, menu_type: menu.menuType, name: menu.name, required_pt: menu.requiredPt, sort_order: menu.sortOrder });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/my_menus/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const id = parseInt(req.params.id);
+      const schema = z.object({ menu_type: z.enum(["treatment", "divination"]).optional(), name: z.string().min(1).max(50).optional(), required_pt: z.number().int().min(0).optional() });
+      const parsed = schema.parse(req.body);
+      const data: any = {};
+      if (parsed.menu_type) data.menuType = parsed.menu_type;
+      if (parsed.name) data.name = parsed.name;
+      if (parsed.required_pt !== undefined) data.requiredPt = parsed.required_pt;
+      const updated = await storage.updateAdvisorMenu(id, data);
+      if (!updated) return res.status(404).json({ error: "メニューが見つかりません" });
+      res.json({ id: updated.id, menu_type: updated.menuType, name: updated.name, required_pt: updated.requiredPt });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/my_menus/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      await storage.deleteAdvisorMenu(parseInt(req.params.id));
+      res.json({ message: "削除しました" });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/my_menus/reorder", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const { ids } = z.object({ ids: z.array(z.number()) }).parse(req.body);
+      await storage.reorderAdvisorMenus(ids);
+      res.json({ message: "並び替えました" });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ---- Advisor Templates ----
+
+  app.get("/api/my_templates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const tpls = await storage.getAdvisorTemplates(user.id);
+      res.json(tpls.map((t) => ({ id: t.id, text: t.text, sort_order: t.sortOrder })));
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/my_templates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const existing = await storage.getAdvisorTemplates(user.id);
+      if (existing.length >= 100) return res.status(400).json({ error: "テンプレートは100件まで登録できます" });
+      const { text } = z.object({ text: z.string().min(1).max(500) }).parse(req.body);
+      const tpl = await storage.createAdvisorTemplate({ fortunetellerId: user.id, text, sortOrder: existing.length });
+      res.status(201).json({ id: tpl.id, text: tpl.text, sort_order: tpl.sortOrder });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.patch("/api/my_templates/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const { text } = z.object({ text: z.string().min(1).max(500) }).parse(req.body);
+      const updated = await storage.updateAdvisorTemplate(parseInt(req.params.id), { text });
+      if (!updated) return res.status(404).json({ error: "テンプレートが見つかりません" });
+      res.json({ id: updated.id, text: updated.text });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.delete("/api/my_templates/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      await storage.deleteAdvisorTemplate(parseInt(req.params.id));
+      res.json({ message: "削除しました" });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  app.post("/api/my_templates/reorder", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const { ids } = z.object({ ids: z.array(z.number()) }).parse(req.body);
+      await storage.reorderAdvisorTemplates(ids);
+      res.json({ message: "並び替えました" });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+  });
+
+  // ---- Stripe Payment ----
+
+  app.get("/api/stripe/config", async (_req: Request, res: Response) => {
+    try {
+      const { getStripePublishableKey } = await import("./stripeClient");
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishable_key: publishableKey });
+    } catch (e: any) {
+      res.status(500).json({ error: "Stripe設定の取得に失敗しました" });
+    }
+  });
+
+  app.post("/api/stripe/create_checkout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+
+      const schema = z.object({ plan_type: z.enum(["standard", "premium"]) });
+      const { plan_type } = schema.parse(req.body);
+
+      const amount = plan_type === "premium" ? 50000 : 20000;
+      const planName = plan_type === "premium" ? "プレミアムコース (50,000円/30日)" : "スタンダードコース (20,000円/30日)";
+
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+
+      const origin = req.headers.origin || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "jpy",
+            unit_amount: amount,
+            product_data: { name: planName },
+          },
+          quantity: 1,
+        }],
+        metadata: { querent_id: user.id.toString(), plan_type },
+        success_url: `${origin}/?payment=success&plan=${plan_type}`,
+        cancel_url: `${origin}/?payment=cancel`,
+      });
+
+      res.json({ url: session.url });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
+    try {
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const sig = req.headers["stripe-signature"] as string;
+      if (!sig) return res.status(400).json({ error: "Missing signature" });
+
+      const event = stripe.webhooks.constructEventAsync
+        ? await stripe.webhooks.constructEventAsync(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "")
+        : stripe.webhooks.constructEvent(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "");
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as any;
+        const querentId = parseInt(session.metadata?.querent_id);
+        const planType = session.metadata?.plan_type || "standard";
+        if (querentId) {
+          const amount = planType === "premium" ? 50000 : 20000;
+          const now = new Date();
+          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          await storage.cancelSubscription(querentId).catch(() => {});
+          await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
+          await storage.updateQuerentProfile(querentId, { isSubscription: true });
+        }
+      }
+      res.json({ received: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
     }
   });
 
@@ -1060,10 +1317,54 @@ export function registerRoutes(app: Express) {
         is_recommended: p.isRecommended,
         style: p.style,
         divination_methods: p.divinationMethods,
+        profile_image: p.profileImage,
+        icon_image: p.iconImage,
       }));
       res.json(list);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
+
+  app.post("/api/admin/fortunetellers/:userId/upload_image",
+    requireAdmin,
+    upload.single("file"),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = parseInt(req.params.userId);
+        const imageType = req.body.image_type as "banner" | "icon";
+        if (!["banner", "icon"].includes(imageType)) return res.status(400).json({ error: "image_typeはbanner/iconのいずれかです" });
+        if (!req.file) return res.status(400).json({ error: "ファイルが必要です" });
+
+        const sharpImg = sharp(req.file.buffer);
+        const meta = await sharpImg.metadata();
+        const w = meta.width || 1;
+        const h = meta.height || 1;
+        const ratio = w / h;
+
+        if (imageType === "icon") {
+          if (Math.abs(ratio - 1) > 0.15) return res.status(400).json({ error: "アイコンは正方形（1:1）で提供してください" });
+          if (req.file.size > 2 * 1024 * 1024) return res.status(400).json({ error: "アイコンは2MB以内にしてください" });
+        } else {
+          if (ratio < 16 / 10 || ratio > 2.1) return res.status(400).json({ error: "バナーは横長（16:9〜2:1）で提供してください" });
+          if (req.file.size > 5 * 1024 * 1024) return res.status(400).json({ error: "バナーは5MB以内にしてください" });
+        }
+
+        if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+        const filename = `${imageType}_${userId}_${Date.now()}.webp`;
+        const outPath = path.join(UPLOADS_DIR, filename);
+        await sharpImg.webp({ quality: 85 }).toFile(outPath);
+        const imageUrl = `/uploads/${filename}`;
+
+        const data: any = {};
+        if (imageType === "icon") data.iconImage = imageUrl;
+        else data.profileImage = imageUrl;
+        await storage.updateFortunetellerProfile(userId, data);
+
+        res.json({ url: imageUrl, image_type: imageType });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    }
+  );
 }

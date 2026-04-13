@@ -1,8 +1,9 @@
 import { db } from "./db";
-import { eq, and, desc, gte, sql, ne, count } from "drizzle-orm";
+import { eq, and, desc, gte, sql, ne, count, asc } from "drizzle-orm";
 import { lte } from "drizzle-orm";
 import {
   users, fortunetellerProfiles, querentProfiles, bankInfo, rooms, messages, subscriptions, transferRequests, passwordResetTokens,
+  advisorMenus, advisorTemplates,
   type User, type InsertUser,
   type FortunetellerProfile, type InsertFortunetellerProfile,
   type QuerentProfile, type InsertQuerentProfile,
@@ -11,6 +12,8 @@ import {
   type Message, type InsertMessage,
   type Subscription, type InsertSubscription,
   type TransferRequest, type InsertTransferRequest,
+  type AdvisorMenu, type InsertAdvisorMenu,
+  type AdvisorTemplate, type InsertAdvisorTemplate,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -71,6 +74,22 @@ export interface IStorage {
   getPasswordResetToken(token: string): Promise<{ userId: number; expiresAt: Date; usedAt: Date | null } | undefined>;
   markPasswordResetTokenUsed(token: string): Promise<void>;
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
+  updateUserLastLogin(userId: number): Promise<void>;
+
+  getAdvisorMenus(fortunetellerId: number): Promise<AdvisorMenu[]>;
+  createAdvisorMenu(menu: InsertAdvisorMenu): Promise<AdvisorMenu>;
+  updateAdvisorMenu(id: number, data: Partial<InsertAdvisorMenu>): Promise<AdvisorMenu | undefined>;
+  deleteAdvisorMenu(id: number): Promise<void>;
+  reorderAdvisorMenus(ids: number[]): Promise<void>;
+
+  getAdvisorTemplates(fortunetellerId: number): Promise<AdvisorTemplate[]>;
+  createAdvisorTemplate(tpl: InsertAdvisorTemplate): Promise<AdvisorTemplate>;
+  updateAdvisorTemplate(id: number, data: Partial<InsertAdvisorTemplate>): Promise<AdvisorTemplate | undefined>;
+  deleteAdvisorTemplate(id: number): Promise<void>;
+  reorderAdvisorTemplates(ids: number[]): Promise<void>;
+
+  getSubscriptionAdvisorCount(querentId: number): Promise<number>;
+  isAdvisorInSubscription(querentId: number, fortunetellerId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -367,6 +386,91 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserPassword(userId: number, hashedPassword: string): Promise<void> {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+  }
+
+  async updateUserLastLogin(userId: number): Promise<void> {
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async getAdvisorMenus(fortunetellerId: number): Promise<AdvisorMenu[]> {
+    return db.select().from(advisorMenus)
+      .where(eq(advisorMenus.fortunetellerId, fortunetellerId))
+      .orderBy(asc(advisorMenus.sortOrder));
+  }
+
+  async createAdvisorMenu(menu: InsertAdvisorMenu): Promise<AdvisorMenu> {
+    const [m] = await db.insert(advisorMenus).values(menu).returning();
+    return m;
+  }
+
+  async updateAdvisorMenu(id: number, data: Partial<InsertAdvisorMenu>): Promise<AdvisorMenu | undefined> {
+    const [m] = await db.update(advisorMenus).set(data).where(eq(advisorMenus.id, id)).returning();
+    return m;
+  }
+
+  async deleteAdvisorMenu(id: number): Promise<void> {
+    await db.delete(advisorMenus).where(eq(advisorMenus.id, id));
+  }
+
+  async reorderAdvisorMenus(ids: number[]): Promise<void> {
+    for (let i = 0; i < ids.length; i++) {
+      await db.update(advisorMenus).set({ sortOrder: i }).where(eq(advisorMenus.id, ids[i]));
+    }
+  }
+
+  async getAdvisorTemplates(fortunetellerId: number): Promise<AdvisorTemplate[]> {
+    return db.select().from(advisorTemplates)
+      .where(eq(advisorTemplates.fortunetellerId, fortunetellerId))
+      .orderBy(asc(advisorTemplates.sortOrder));
+  }
+
+  async createAdvisorTemplate(tpl: InsertAdvisorTemplate): Promise<AdvisorTemplate> {
+    const [t] = await db.insert(advisorTemplates).values(tpl).returning();
+    return t;
+  }
+
+  async updateAdvisorTemplate(id: number, data: Partial<InsertAdvisorTemplate>): Promise<AdvisorTemplate | undefined> {
+    const [t] = await db.update(advisorTemplates).set(data).where(eq(advisorTemplates.id, id)).returning();
+    return t;
+  }
+
+  async deleteAdvisorTemplate(id: number): Promise<void> {
+    await db.delete(advisorTemplates).where(eq(advisorTemplates.id, id));
+  }
+
+  async reorderAdvisorTemplates(ids: number[]): Promise<void> {
+    for (let i = 0; i < ids.length; i++) {
+      await db.update(advisorTemplates).set({ sortOrder: i }).where(eq(advisorTemplates.id, ids[i]));
+    }
+  }
+
+  async getSubscriptionAdvisorCount(querentId: number): Promise<number> {
+    const sub = await this.getActiveSubscription(querentId);
+    if (!sub) return 0;
+    const result = await db.execute(sql`
+      SELECT COUNT(DISTINCT r.fortuneteller_id) as cnt
+      FROM rooms r
+      JOIN messages m ON m.room_id = r.id
+      WHERE r.querent_id = ${querentId}
+        AND m.created_at >= ${sub.startDate}
+        AND m.sender = 'querent'
+    `);
+    return parseInt((result.rows[0] as any)?.cnt ?? "0");
+  }
+
+  async isAdvisorInSubscription(querentId: number, fortunetellerId: number): Promise<boolean> {
+    const sub = await this.getActiveSubscription(querentId);
+    if (!sub) return false;
+    const result = await db.execute(sql`
+      SELECT 1 FROM rooms r
+      JOIN messages m ON m.room_id = r.id
+      WHERE r.querent_id = ${querentId}
+        AND r.fortuneteller_id = ${fortunetellerId}
+        AND m.created_at >= ${sub.startDate}
+        AND m.sender = 'querent'
+      LIMIT 1
+    `);
+    return result.rows.length > 0;
   }
 }
 

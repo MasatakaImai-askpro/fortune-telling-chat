@@ -16,6 +16,37 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app = express();
 app.set("trust proxy", 1);
+
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    try {
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const sig = req.headers["stripe-signature"] as string;
+      if (!sig) return res.status(400).json({ error: "Missing signature" });
+      const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "");
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as any;
+        const querentId = parseInt(session.metadata?.querent_id);
+        const planType = session.metadata?.plan_type || "standard";
+        if (querentId) {
+          const amount = planType === "premium" ? 50000 : 20000;
+          const now = new Date();
+          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          await storage.cancelSubscription(querentId).catch(() => {});
+          await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
+          await storage.updateQuerentProfile(querentId, { isSubscription: true });
+        }
+      }
+      res.json({ received: true });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  }
+);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(UPLOADS_DIR));
@@ -66,7 +97,7 @@ declare module "express-session" {
   }
 }
 
-registerRoutes(app);
+registerRoutes(app, (roomId, data) => broadcastToRoom(roomId, data));
 
 const server = createServer(app);
 

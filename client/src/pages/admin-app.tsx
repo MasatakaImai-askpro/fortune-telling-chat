@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown, Sparkles, Search } from "lucide-react";
+import { ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown, Sparkles, Search, Image } from "lucide-react";
 
 type RankedAdvisor = {
   rank_position: number;
@@ -434,7 +434,116 @@ function UserManagementTab() {
   );
 }
 
-type Tab = "recommend" | "transfers" | "users";
+type Tab = "recommend" | "transfers" | "users" | "images";
+
+type FTProfile = {
+  user_id: number;
+  name: string;
+  profile_image: string;
+  icon_image: string;
+  rank: string;
+};
+
+function ImageManagementTab() {
+  const queryClient = useQueryClient();
+  const { data: advisors, isLoading } = useQuery<FTProfile[]>({ queryKey: ["/api/admin/fortunetellers"] });
+  const [selectedAdvisor, setSelectedAdvisor] = useState<FTProfile | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const bannerRef = useRef<HTMLInputElement>(null);
+  const iconRef = useRef<HTMLInputElement>(null);
+
+  async function uploadImage(file: File, type: "banner" | "icon", userId: number) {
+    setUploading(type);
+    setUploadError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("image_type", type);
+      const res = await fetch(`/api/admin/fortunetellers/${userId}/upload_image`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "アップロードに失敗しました");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fortunetellers"] });
+      if (selectedAdvisor) {
+        setSelectedAdvisor((prev) => prev ? { ...prev, [type === "icon" ? "icon_image" : "profile_image"]: data.url } : null);
+      }
+    } catch (e: any) {
+      setUploadError(e.message);
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  if (isLoading) return <div className="text-gray-500 text-sm p-4">読み込み中...</div>;
+
+  if (selectedAdvisor) {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <button onClick={() => { setSelectedAdvisor(null); setUploadError(""); }} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-pink-600">
+          <ChevronLeft className="w-4 h-4" /> 一覧に戻る
+        </button>
+        <div className="text-base font-bold text-gray-900">{selectedAdvisor.name}</div>
+
+        <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+          <div className="font-semibold text-sm text-gray-800">バナー画像</div>
+          {selectedAdvisor.profile_image
+            ? <img src={selectedAdvisor.profile_image} alt="" className="w-full h-28 object-cover rounded-xl border border-pink-200" />
+            : <div className="w-full h-28 rounded-xl bg-pink-50 border border-pink-200 flex items-center justify-center text-sm text-gray-400">バナー未設定</div>}
+          <input ref={bannerRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "banner", selectedAdvisor.user_id); e.target.value = ""; }} />
+          <button onClick={() => bannerRef.current?.click()} disabled={!!uploading}
+            className="w-full py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold disabled:opacity-50">
+            {uploading === "banner" ? "アップロード中..." : "バナー画像を変更"}
+          </button>
+          <div className="text-[10px] text-gray-400">推奨: 横長（16:9〜2:1）/ 最大5MB / JPEG, PNG, WebP</div>
+        </div>
+
+        <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+          <div className="font-semibold text-sm text-gray-800">アイコン画像</div>
+          {selectedAdvisor.icon_image
+            ? <img src={selectedAdvisor.icon_image} alt="" className="w-16 h-16 rounded-full object-cover border border-pink-200 mx-auto" />
+            : <div className="w-16 h-16 rounded-full bg-pink-50 border border-pink-200 flex items-center justify-center text-sm text-gray-400 mx-auto">未設定</div>}
+          <input ref={iconRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadImage(f, "icon", selectedAdvisor.user_id); e.target.value = ""; }} />
+          <button onClick={() => iconRef.current?.click()} disabled={!!uploading}
+            className="w-full py-2 rounded-xl bg-pink-600 text-white text-sm font-semibold disabled:opacity-50">
+            {uploading === "icon" ? "アップロード中..." : "アイコン画像を変更"}
+          </button>
+          <div className="text-[10px] text-gray-400">推奨: 正方形（1:1）/ 最大2MB / JPEG, PNG, WebP</div>
+        </div>
+
+        {uploadError && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{uploadError}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="text-sm font-bold text-gray-800">占い師プロフィール画像管理</div>
+      <div className="text-xs text-gray-500">占い師を選択して画像を設定してください</div>
+      {(advisors ?? []).map((a) => (
+        <button key={a.user_id} onClick={() => setSelectedAdvisor(a)}
+          className="w-full flex items-center gap-3 bg-white border border-pink-200 rounded-2xl p-3 hover:bg-pink-50 transition-colors text-left">
+          {a.icon_image
+            ? <img src={a.icon_image} alt="" className="w-10 h-10 rounded-full object-cover border border-pink-200 flex-shrink-0" />
+            : <div className="w-10 h-10 rounded-full bg-pink-50 border border-pink-200 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">{a.name.charAt(0)}</div>}
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm text-gray-900">{a.name}</div>
+            <div className="text-xs text-gray-400">
+              {a.icon_image ? "✓ アイコン設定済み" : "✗ アイコン未設定"} /{" "}
+              {a.profile_image ? "✓ バナー設定済み" : "✗ バナー未設定"}
+            </div>
+          </div>
+          <ChevronLeft className="w-4 h-4 text-gray-400 rotate-180 flex-shrink-0" />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminApp() {
   const { user, loading } = useAuth();
@@ -467,7 +576,8 @@ export default function AdminApp() {
   const tabs: { key: Tab; label: string; icon: typeof Sparkles }[] = [
     { key: "recommend", label: "おすすめ", icon: Sparkles },
     { key: "transfers", label: "振込申請", icon: ArrowLeftRight },
-    { key: "users", label: "ユーザー管理", icon: Users },
+    { key: "users", label: "ユーザー", icon: Users },
+    { key: "images", label: "画像管理", icon: Image },
   ];
 
   return (
@@ -484,6 +594,7 @@ export default function AdminApp() {
         {tab === "recommend" && <RecommendTab />}
         {tab === "transfers" && <TransfersTab />}
         {tab === "users" && <UserManagementTab />}
+        {tab === "images" && <ImageManagementTab />}
       </div>
 
       <nav className="border-t border-pink-200 bg-white flex justify-around py-2 safe-area-bottom" data-testid="nav-admin-bottom">
