@@ -25,6 +25,7 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
   regularHolidays: varchar("regular_holidays", { length: 100 }).notNull().default(""),
   businessHours: varchar("business_hours", { length: 100 }).notNull().default(""),
   longIntro: text("long_intro").notNull().default(""),
+  freeNote: text("free_note").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

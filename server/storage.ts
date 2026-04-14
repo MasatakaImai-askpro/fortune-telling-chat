@@ -76,6 +76,8 @@ export interface IStorage {
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
   updateUserLastLogin(userId: number): Promise<void>;
 
+  getSubscriptionSlotAdvisors(querentId: number, since: Date): Promise<number[]>;
+
   getAdvisorMenus(fortunetellerId: number): Promise<AdvisorMenu[]>;
   createAdvisorMenu(menu: InsertAdvisorMenu): Promise<AdvisorMenu>;
   updateAdvisorMenu(id: number, data: Partial<InsertAdvisorMenu>): Promise<AdvisorMenu | undefined>;
@@ -471,6 +473,21 @@ export class DatabaseStorage implements IStorage {
       LIMIT 1
     `);
     return result.rows.length > 0;
+  }
+
+  async getSubscriptionSlotAdvisors(querentId: number, since: Date): Promise<number[]> {
+    const result = await db.execute(sql`
+      SELECT r.fortuneteller_id, MIN(m.created_at) as first_msg
+      FROM rooms r
+      INNER JOIN messages m ON m.room_id = r.id
+      WHERE r.querent_id = ${querentId}
+        AND m.sender = 'querent'
+        AND m.created_at >= ${since}
+      GROUP BY r.fortuneteller_id
+      ORDER BY first_msg ASC
+      LIMIT 5
+    `);
+    return (result.rows as any[]).map((row: any) => Number(row.fortuneteller_id));
   }
 }
 

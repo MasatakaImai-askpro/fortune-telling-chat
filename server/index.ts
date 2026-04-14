@@ -97,7 +97,7 @@ declare module "express-session" {
   }
 }
 
-registerRoutes(app, (roomId, data) => broadcastToRoom(roomId, data));
+registerRoutes(app, (roomId, data) => broadcastToRoom(roomId, data), (advisorId, data) => broadcastToAdvisor(advisorId, data));
 
 const server = createServer(app);
 
@@ -116,6 +116,15 @@ function broadcastToRoom(roomId: string, data: any) {
   const msg = JSON.stringify(data);
   Array.from(clients).forEach((client) => {
     if (client.roomId === roomId && client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(msg);
+    }
+  });
+}
+
+function broadcastToAdvisor(fortunetellerId: number, data: any) {
+  const msg = JSON.stringify(data);
+  Array.from(clients).forEach((client) => {
+    if (client.fortunetellerId === fortunetellerId && !client.roomId && client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(msg);
     }
   });
@@ -245,8 +254,34 @@ wss.on("connection", async (ws, req) => {
         } else {
           const activeSub = await storage.getActiveSubscription(userId);
           if (activeSub) {
-            costPt = 0;
-            msgCategory = "free";
+            const subStart = activeSub.startDate;
+            const slotAdvisors = await storage.getSubscriptionSlotAdvisors(userId, subStart);
+            const roomData2 = await storage.getRoom(roomId);
+            const advisorId = roomData2?.fortunetellerId;
+            const isInSlot = advisorId ? slotAdvisors.includes(advisorId) : false;
+            const slotFull = slotAdvisors.length >= 5;
+            if (isInSlot || (!slotFull && advisorId)) {
+              costPt = 0;
+              msgCategory = "free";
+            } else {
+              const roomData3 = roomData2;
+              if (roomData3) {
+                const revenue = await storage.getFortuneteller6MonthRevenue(roomData3.fortunetellerId);
+                const rankInfo = computeRankFromRevenue(revenue);
+                const RANK_MULT2: Record<string, number> = {
+                  DIAMOND_PLUS: 7, DIAMOND: 6, PLATINUM_PLUS: 5,
+                  PLATINUM: 4, GOLD: 3, SILVER: 2, BRONZE: 1,
+                };
+                const mult2 = RANK_MULT2[rankInfo.rank] || 1;
+                costPt = text.length * mult2;
+                msgCategory = "length_paying";
+                const deducted = await storage.deductPoints(userId, costPt);
+                if (!deducted) {
+                  ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
+                  return;
+                }
+              }
+            }
           } else {
             const roomData = await storage.getRoom(roomId);
             if (roomData) {

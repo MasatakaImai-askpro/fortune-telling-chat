@@ -39,7 +39,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-export function registerRoutes(app: Express, broadcast?: (roomId: string, data: any) => void) {
+export function registerRoutes(app: Express, broadcast?: (roomId: string, data: any) => void, broadcastToAdvisor?: (advisorId: number, data: any) => void) {
   app.post("/api/user_login", async (req: Request, res: Response) => {
     try {
       const { email, password, role } = req.body;
@@ -285,6 +285,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         regular_holidays: profile.regularHolidays,
         business_hours: profile.businessHours,
         long_intro: profile.longIntro,
+        free_note: profile.freeNote || "",
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -293,9 +294,12 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   app.patch("/api/my_fortuneteller_profile", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { name, headline, intro, style, divination_methods, profile_image, icon_image, regular_holidays, business_hours, long_intro } = req.body;
+      const { name, headline, intro, style, divination_methods, profile_image, icon_image, regular_holidays, business_hours, long_intro, free_note } = req.body;
       if (long_intro !== undefined && typeof long_intro === "string" && long_intro.length > 10000) {
         return res.status(400).json({ error: "紹介文は10,000文字以内にしてください" });
+      }
+      if (free_note !== undefined && typeof free_note === "string" && free_note.length > 3000) {
+        return res.status(400).json({ error: "フリーメモは3,000文字以内にしてください" });
       }
       if (regular_holidays !== undefined && typeof regular_holidays === "string" && regular_holidays.length > 100) {
         return res.status(400).json({ error: "定休日は100文字以内にしてください" });
@@ -314,6 +318,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (regular_holidays !== undefined) updateData.regularHolidays = regular_holidays;
       if (business_hours !== undefined) updateData.businessHours = business_hours;
       if (long_intro !== undefined) updateData.longIntro = long_intro;
+      if (free_note !== undefined) updateData.freeNote = free_note;
       const updated = await storage.updateFortunetellerProfile(req.session.userId!, updateData);
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });
@@ -801,10 +806,19 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const updated = await storage.unlockMessage(msg.id);
       if (!updated) return res.status(500).json({ error: "開封に失敗しました" });
 
+      const querentProfile = await storage.getQuerentProfile(user.id);
       if (broadcast) {
         broadcast(String(msg.roomId), {
           type: "message_unlocked",
           message_id: String(msg.id),
+          cost_pt: cost,
+        });
+      }
+      if (broadcastToAdvisor) {
+        broadcastToAdvisor(room.fortunetellerId, {
+          type: "unlock_notification",
+          room_id: String(msg.roomId),
+          querent_name: querentProfile?.name || "相談者",
           cost_pt: cost,
         });
       }
@@ -1107,19 +1121,74 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
         const querentId = parseInt(session.metadata?.querent_id);
-        const planType = session.metadata?.plan_type || "standard";
-        if (querentId) {
-          const amount = planType === "premium" ? 50000 : 20000;
-          const now = new Date();
-          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-          await storage.cancelSubscription(querentId).catch(() => {});
-          await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
-          await storage.updateQuerentProfile(querentId, { isSubscription: true });
+        const purchaseType = session.metadata?.purchase_type;
+        if (purchaseType === "points") {
+          const points = parseInt(session.metadata?.points || "0");
+          if (querentId && points > 0) {
+            const profile = await storage.getQuerentProfile(querentId);
+            if (profile) {
+              await storage.updateQuerentProfile(querentId, { points: (profile.points || 0) + points });
+            }
+          }
+        } else {
+          const planType = session.metadata?.plan_type || "standard";
+          if (querentId) {
+            const amount = planType === "premium" ? 50000 : 20000;
+            const now = new Date();
+            const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            await storage.cancelSubscription(querentId).catch(() => {});
+            await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
+            await storage.updateQuerentProfile(querentId, { isSubscription: true });
+          }
         }
       }
       res.json({ received: true });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/my_subscription_slots", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const activeSub = await storage.getActiveSubscription(user.id);
+      if (!activeSub) return res.json({ slot_advisor_ids: [], count: 0, max: 5 });
+      const subStart = activeSub.startDate;
+      const slotAdvisors = await storage.getSubscriptionSlotAdvisors(user.id, subStart);
+      res.json({ slot_advisor_ids: slotAdvisors, count: slotAdvisors.length, max: 5 });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/stripe/create_point_checkout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
+      const schema = z.object({ amount_yen: z.number().int().min(500) });
+      const { amount_yen } = schema.parse(req.body);
+      const pts = Math.floor(amount_yen / 1.5);
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const origin = req.headers.origin || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "jpy",
+            unit_amount: amount_yen,
+            product_data: { name: `ポイント購入 ${pts.toLocaleString()}pt (${amount_yen.toLocaleString()}円)` },
+          },
+          quantity: 1,
+        }],
+        metadata: { querent_id: user.id.toString(), purchase_type: "points", points: pts.toString() },
+        success_url: `${origin}/?payment=success&type=points&pts=${pts}`,
+        cancel_url: `${origin}/?payment=cancel`,
+      });
+      res.json({ url: session.url });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
   });
 

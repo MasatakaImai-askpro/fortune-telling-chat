@@ -429,6 +429,10 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
     queryKey: ["/api/my_rooms"],
     refetchInterval: 10000,
   });
+  const { data: slotData } = useQuery<{ slot_advisor_ids: number[]; count: number; max: number }>({
+    queryKey: ["/api/my_subscription_slots"],
+  });
+  const slotAdvisorIds = slotData?.slot_advisor_ids ?? [];
 
   if (isLoading) return <div className="text-gray-500 text-center py-8">読み込み中...</div>;
   if (rooms.length === 0) return <div className="text-center text-gray-400 text-sm py-8">まだ相談履歴がありません。占い師を選んで相談を始めましょう。</div>;
@@ -444,10 +448,16 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
 
   return (
     <div className="bg-white rounded-2xl border border-pink-200 overflow-hidden">
+      {slotData && slotData.count > 0 && (
+        <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 text-[10px] text-emerald-700">
+          サブスク無料チャット: {slotData.count}/{slotData.max}人のアドバイザーと使用中
+        </div>
+      )}
       {rooms.map((room, idx) => {
         const isFromAdvisor = room.last_message_sender === "fortuneteller";
         const hasUnread = (room.unread_count ?? 0) > 0;
         const lastAt = room.last_at || room.last_message_at;
+        const isSlotAdvisor = slotAdvisorIds.includes(room.fortuneteller_id);
         return (
           <button key={room.id} onClick={() => onSelectAdvisor(room.fortuneteller_id)}
             className={cls("w-full text-left flex items-center gap-3 px-4 py-3 transition-colors hover:bg-pink-50 active:bg-pink-100", idx < rooms.length - 1 ? "border-b border-pink-100" : "")}
@@ -459,7 +469,14 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1">
-                <span className="font-semibold text-sm text-gray-900 truncate">{room.fortuneteller_name}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-semibold text-sm text-gray-900 truncate">{room.fortuneteller_name}</span>
+                  {isSlotAdvisor && slotData?.count > 0 && (
+                    <span className="flex-shrink-0 text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5 font-semibold leading-none">
+                      サブスク無料
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {lastAt && <span className="text-[10px] text-gray-400">{dateLabel(lastAt)}</span>}
                   {hasUnread && (
@@ -899,6 +916,20 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     } finally { setSubLoading(false); }
   }
 
+  async function handlePointPurchase(amountYen: number) {
+    try {
+      const res = await apiRequest("POST", "/api/stripe/create_point_checkout", { amount_yen: amountYen });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "ポイント購入ページへの移動に失敗しました");
+      }
+    } catch (e: any) {
+      alert(e?.message || "ポイント購入に失敗しました");
+    }
+  }
+
   async function handleSaveKarte() {
     if (!queInfo) return;
     try {
@@ -1009,19 +1040,17 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
             </div>
-            {!queInfo.subscription && (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {[{ yen: 500, pt: Math.floor(500 / YEN_PER_POINT) }, { yen: 1000, pt: Math.floor(1000 / YEN_PER_POINT) }, { yen: 3000, pt: Math.floor(3000 / YEN_PER_POINT) }, { yen: 5000, pt: Math.floor(5000 / YEN_PER_POINT) }, { yen: 10000, pt: Math.floor(10000 / YEN_PER_POINT) }, { yen: 30000, pt: Math.floor(30000 / YEN_PER_POINT) }].map((opt) => (
-                  <button key={opt.yen} className="rounded-xl px-2 py-2 text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 transition-colors" data-testid={`button-buy-${opt.yen}`}>
-                    <div>{opt.yen.toLocaleString()}円</div>
-                    <div className="text-[10px] opacity-80">{opt.pt.toLocaleString()}pt</div>
-                  </button>
-                ))}
-              </div>
-            )}
             {queInfo.subscription && (
-              <div className="mt-3 text-xs text-emerald-600">サブスク契約中のためポイント消費はありません</div>
+              <div className="mt-2 text-xs text-emerald-600">サブスク中は最大5人の占い師と無料チャット（施術・6人目以降はポイント必要）</div>
             )}
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[{ yen: 500, pt: Math.floor(500 / YEN_PER_POINT) }, { yen: 1000, pt: Math.floor(1000 / YEN_PER_POINT) }, { yen: 3000, pt: Math.floor(3000 / YEN_PER_POINT) }, { yen: 5000, pt: Math.floor(5000 / YEN_PER_POINT) }, { yen: 10000, pt: Math.floor(10000 / YEN_PER_POINT) }, { yen: 30000, pt: Math.floor(30000 / YEN_PER_POINT) }].map((opt) => (
+                <button key={opt.yen} onClick={() => handlePointPurchase(opt.yen)} className="rounded-xl px-2 py-2 text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 transition-colors disabled:opacity-50" data-testid={`button-buy-${opt.yen}`}>
+                  <div>{opt.yen.toLocaleString()}円</div>
+                  <div className="text-[10px] opacity-80">{opt.pt.toLocaleString()}pt</div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

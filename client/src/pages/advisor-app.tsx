@@ -43,6 +43,7 @@ type Profile = {
   regular_holidays: string;
   business_hours: string;
   long_intro: string;
+  free_note: string;
 };
 
 type BankInfo = {
@@ -89,7 +90,11 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "treatment">("free");
   const [inputError, setInputError] = useState("");
   const [unlockNotification, setUnlockNotification] = useState<number | null>(null);
+  const [showAdvisorTemplates, setShowAdvisorTemplates] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const { data: advisorTemplates = [] } = useQuery<AdvisorTemplate[]>({ queryKey: ["/api/my_templates"] });
+  const { data: advisorMenus = [] } = useQuery<AdvisorMenu[]>({ queryKey: ["/api/my_menus"] });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scrollBottom = useCallback(() => {
@@ -124,6 +129,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
           setMessages((prev) => [...prev, data.message]);
           if (data.message.subscription_bonus && data.message.sender === "fortuneteller") {
             alert(`サブスク会員への初回対応ボーナス: +${data.message.subscription_bonus}pt を獲得しました！`);
+            queryClient.invalidateQueries({ queryKey: ["/api/my_cashable"] });
           }
           setTimeout(scrollBottom, 50);
         } else if (data.type === "message_unlocked") {
@@ -248,32 +254,79 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         </div>
         {msgCategory === "treatment" ? (
           <div className="px-3 pt-2 pb-3 space-y-2">
+            {advisorMenus.length > 0 ? (
+              <>
+                <div className="text-[10px] text-gray-500 font-semibold">メニューから選択</div>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {["treatment", "divination"].map((menuType) => {
+                    const typeMenus = advisorMenus.filter((m) => m.menu_type === menuType);
+                    if (typeMenus.length === 0) return null;
+                    return (
+                      <div key={menuType}>
+                        <div className="text-[9px] text-gray-400 mb-0.5">{menuType === "treatment" ? "施術" : "鑑定"}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {typeMenus.map((m) => (
+                            <button key={m.id} onClick={() => { setTreatmentTitle(m.name); setTreatmentPt(m.required_pt); }}
+                              className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${treatmentPt === m.required_pt && treatmentTitle === m.name ? "bg-amber-500 border-amber-400 text-white" : "bg-pink-50 border-pink-200 text-gray-700 hover:bg-amber-50"}`}>
+                              {m.name} ({m.required_pt.toLocaleString()}pt)
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[10px] text-gray-400">または手動入力</div>
+              </>
+            ) : (
+              <div className="text-[10px] text-gray-400">メニューは「プロフィール→メニュー」から設定できます</div>
+            )}
             <input type="text" value={treatmentTitle} onChange={(e) => handleTitleChange(e.target.value)} data-testid="input-treatment-title"
-              placeholder="施術タイトル（任意）" maxLength={100}
-              className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
+              placeholder="施術・鑑定タイトル（任意）" maxLength={100}
+              className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
             <div className="grid grid-cols-3 gap-1.5">
               {[500, 1000, 2000, 3000, 5000, 10000].map((pt) => (
                 <button key={pt} onClick={() => setTreatmentPt(pt)} data-testid={`button-treatment-pt-${pt}`}
-                  className={`rounded-xl py-1.5 text-xs font-semibold border transition-colors ${treatmentPt === pt ? "bg-amber-500 border-amber-400 text-white" : "bg-pink-50 border-pink-200 text-gray-700 hover:bg-amber-50"}`}>
+                  className={`rounded-xl py-1.5 text-xs font-semibold border transition-colors ${treatmentPt === pt && !advisorMenus.some((m) => m.required_pt === pt && m.name === treatmentTitle) ? "bg-amber-500 border-amber-400 text-white" : "bg-pink-50 border-pink-200 text-gray-700 hover:bg-amber-50"}`}>
                   {pt.toLocaleString()}pt
                 </button>
               ))}
             </div>
             <div className="flex items-center justify-between gap-2">
               <div className="text-[11px] text-amber-600 font-semibold" data-testid="text-treatment-cost">
-                施術金額: <b>{treatmentPt.toLocaleString()}pt</b>
+                {treatmentTitle ? <span>{treatmentTitle}: </span> : null}<b>{treatmentPt.toLocaleString()}pt</b>
               </div>
               <button onClick={sendMessage} data-testid="button-ft-send-treatment"
                 disabled={treatmentPt <= 0}
                 className="rounded-xl px-4 py-1.5 text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors flex items-center gap-1.5">
-                <Send className="w-3 h-3" /> 施術を送信
+                <Send className="w-3 h-3" /> 送信
               </button>
             </div>
           </div>
         ) : (
           <>
+            {showAdvisorTemplates && advisorTemplates.length > 0 && (
+              <div className="px-3 pt-2 pb-1 border-t border-pink-100 max-h-32 overflow-y-auto">
+                <div className="text-[10px] text-gray-500 mb-1 font-semibold">テンプレートから選択</div>
+                <div className="space-y-1">
+                  {advisorTemplates.map((t) => (
+                    <button key={t.id} onClick={() => { setInput(t.text); setShowAdvisorTemplates(false); }}
+                      className="w-full text-left text-xs px-2 py-1.5 rounded-lg bg-pink-50 border border-pink-200 text-gray-800 hover:bg-pink-100 transition-colors truncate">
+                      {t.text}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {inputError && <div className="text-[10px] text-red-600 px-3 pt-1" data-testid="text-ft-input-error">{inputError}</div>}
             <div className="flex items-center gap-2 p-3">
+              {advisorTemplates.length > 0 && (
+                <button onClick={() => setShowAdvisorTemplates((v) => !v)} data-testid="button-ft-show-templates"
+                  title="テンプレート"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs border transition-colors flex-shrink-0 ${showAdvisorTemplates ? "bg-pink-600 border-pink-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"}`}>
+                  📝
+                </button>
+              )}
               <input type="text" value={input} onChange={(e) => handleInputChange(e.target.value)} data-testid="input-ft-message"
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
                 placeholder="メッセージを入力..."
@@ -347,6 +400,7 @@ function ProfileSettings() {
   const [regularHolidays, setRegularHolidays] = useState("");
   const [businessHours, setBusinessHours] = useState("");
   const [longIntro, setLongIntro] = useState("");
+  const [freeNote, setFreeNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -368,6 +422,7 @@ function ProfileSettings() {
       setRegularHolidays(profile.regular_holidays || "");
       setBusinessHours(profile.business_hours || "");
       setLongIntro(profile.long_intro || "");
+      setFreeNote(profile.free_note || "");
     }
   }, [profile]);
 
@@ -438,6 +493,7 @@ function ProfileSettings() {
         name, headline, intro, style, divination_methods: divinationMethods,
         profile_image: profileImage, icon_image: iconImage,
         regular_holidays: regularHolidays, business_hours: businessHours, long_intro: longIntro,
+        free_note: freeNote,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/my_fortuneteller_profile"] });
       queryClient.invalidateQueries({ queryKey: ["/api/get_fortuneteller_all"] });
@@ -490,6 +546,13 @@ function ProfileSettings() {
         <textarea value={longIntro} onChange={(e) => { if (e.target.value.length <= 10000) setLongIntro(e.target.value); }} rows={8} data-testid="textarea-profile-long-intro"
           className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-y" />
         <span className="text-[11px] text-gray-400 mt-1 block">{longIntro.length.toLocaleString()} / 10,000文字</span>
+      </label>
+      <label className="block text-sm">
+        <span className="text-gray-600">フリーメモ（3,000文字以内・相談者には非公開）</span>
+        <textarea value={freeNote} onChange={(e) => { if (e.target.value.length <= 3000) setFreeNote(e.target.value); }} rows={5} data-testid="textarea-profile-free-note"
+          placeholder="自分用のメモや備考など自由に記入できます"
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none resize-y" />
+        <span className="text-[11px] text-gray-400 mt-1 block">{freeNote.length.toLocaleString()} / 3,000文字</span>
       </label>
       <label className="block text-sm">
         <span className="text-gray-600 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />営業時間</span>
@@ -590,22 +653,28 @@ function MenuSettings() {
   if (isLoading) return <div className="text-gray-400 text-sm py-4">読み込み中...</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-3">
       <div className="text-sm font-bold text-gray-800">メニュー設定</div>
-      <div className="bg-white border border-pink-200 rounded-2xl p-3 space-y-2">
-        <div className="text-xs text-gray-500">新しいメニューを追加</div>
-        <div className="flex gap-2">
+      <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+        <div className="text-xs text-gray-500 font-semibold">新しいメニューを追加</div>
+        <div className="space-y-2">
           <select value={newType} onChange={(e) => setNewType(e.target.value as any)}
-            className="rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-900 focus:outline-none">
-            <option value="treatment">施術</option>
-            <option value="divination">鑑定</option>
+            className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400">
+            <option value="treatment">施術メニュー</option>
+            <option value="divination">鑑定メニュー</option>
           </select>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="メニュー名" maxLength={50}
-            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
-          <input value={newPt} onChange={(e) => setNewPt(e.target.value.replace(/\D/g, ""))} placeholder="必要pt" maxLength={6}
-            className="w-20 rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="メニュー名（例: タロット鑑定）" maxLength={50}
+            className="w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+          <div className="flex gap-2 items-center">
+            <label className="text-xs text-gray-600 flex-shrink-0">必要ポイント</label>
+            <input value={newPt} onChange={(e) => setNewPt(e.target.value.replace(/\D/g, ""))} placeholder="例: 1000" maxLength={6}
+              className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-pink-400" />
+            <span className="text-xs text-gray-500 flex-shrink-0">pt</span>
+          </div>
           <button onClick={addMenu} disabled={saving || !newName.trim() || !newPt}
-            className="rounded-xl px-3 py-1.5 text-xs font-semibold bg-pink-600 text-white disabled:opacity-50">追加</button>
+            className="w-full rounded-xl py-2.5 text-sm font-semibold bg-pink-600 text-white disabled:opacity-50 transition-colors hover:bg-pink-700">
+            {saving ? "追加中..." : "メニューを追加"}
+          </button>
         </div>
       </div>
       <div className="space-y-2">
@@ -1195,11 +1264,15 @@ function ProfileTabView() {
   );
 }
 
+type GlobalNotification = { room_id: string; querent_name: string; cost_pt: number };
+
 export default function AdvisorApp() {
   const { user, loading, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<"chat" | "querents" | "profile" | "bank">("chat");
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [globalNotification, setGlobalNotification] = useState<GlobalNotification | null>(null);
+  const globalWsRef = useRef<WebSocket | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -1223,6 +1296,36 @@ export default function AdvisorApp() {
     }
   }, [user, loading, setLocation]);
 
+  useEffect(() => {
+    if (!user || user.role !== "2") return;
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${location.host}/ws?fortuneteller_id=${user.id}`);
+    globalWsRef.current = ws;
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === "unlock_notification") {
+          setGlobalNotification({ room_id: data.room_id, querent_name: data.querent_name, cost_pt: data.cost_pt ?? 0 });
+          queryClient.invalidateQueries({ queryKey: ["/api/my_cashable"] });
+          setTimeout(() => setGlobalNotification(null), 8000);
+        }
+      } catch {}
+    };
+    return () => { ws.close(); };
+  }, [user?.id]);
+
+  function handleNavigateToRoom(roomId: string) {
+    setGlobalNotification(null);
+    const room = (rooms ?? []).find((r) => r.id === roomId);
+    if (room) {
+      setTab("chat");
+      setSelectedRoom(room);
+    } else {
+      setTab("chat");
+      queryClient.invalidateQueries({ queryKey: ["/api/my_rooms"] });
+    }
+  }
+
   async function handleLogout() {
     await apiRequest("POST", "/api/logout", {});
     await refreshUser();
@@ -1238,7 +1341,20 @@ export default function AdvisorApp() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white text-gray-900">
+    <div className="h-screen flex flex-col bg-white text-gray-900 relative">
+      {globalNotification && (
+        <div className="absolute top-14 left-2 right-2 z-50 bg-amber-500 text-white rounded-2xl shadow-xl p-3 flex items-start gap-3" data-testid="banner-unlock-notification">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold">🔓 {globalNotification.querent_name} さんがメッセージをアンロックしました</div>
+            {globalNotification.cost_pt > 0 && <div className="text-[10px] mt-0.5 opacity-90">+{globalNotification.cost_pt.toLocaleString()}pt</div>}
+          </div>
+          <button onClick={() => handleNavigateToRoom(globalNotification.room_id)}
+            className="flex-shrink-0 bg-white text-amber-700 text-[10px] font-bold px-2.5 py-1 rounded-lg">
+            チャットを開く
+          </button>
+          <button onClick={() => setGlobalNotification(null)} className="flex-shrink-0 text-white/80 hover:text-white text-xs">✕</button>
+        </div>
+      )}
       <header className="flex items-center justify-between px-4 py-3 border-b border-pink-200 bg-white">
         <div className="text-sm font-bold text-gray-900" data-testid="text-advisor-app-title">
           <Sparkles className="w-4 h-4 inline-block mr-1 text-pink-600" />
