@@ -92,6 +92,13 @@ export interface IStorage {
 
   getSubscriptionAdvisorCount(querentId: number): Promise<number>;
   isAdvisorInSubscription(querentId: number, fortunetellerId: number): Promise<boolean>;
+
+  addFortunetellerBonusCashable(advisorId: number, pts: number): Promise<void>;
+  getFortunetellerBonusCashable(advisorId: number): Promise<number>;
+  settleTreatmentMessagesInRoom(roomId: string): Promise<number>;
+  getExpiredUnsettledTreatmentMessages(): Promise<{ id: number; roomId: string; costPt: number; querentId: number }[]>;
+  refundTreatmentMessage(id: number, querentId: number, pts: number): Promise<void>;
+  addQuerentPoints(userId: number, pts: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -207,11 +214,6 @@ export class DatabaseStorage implements IStorage {
   async createMessages(msgs: InsertMessage[]): Promise<Message[]> {
     if (msgs.length === 0) return [];
     return db.insert(messages).values(msgs).returning();
-  }
-
-  async unlockMessage(id: number): Promise<Message | undefined> {
-    const [updated] = await db.update(messages).set({ isLocked: false }).where(eq(messages.id, id)).returning();
-    return updated;
   }
 
   async deductPoints(userId: number, amount: number): Promise<boolean> {
@@ -488,6 +490,75 @@ export class DatabaseStorage implements IStorage {
       LIMIT 5
     `);
     return (result.rows as any[]).map((row: any) => Number(row.fortuneteller_id));
+  }
+
+  async unlockMessage(id: number): Promise<Message | undefined> {
+    const [updated] = await db.update(messages)
+      .set({ isLocked: false, unlockedAt: new Date() })
+      .where(eq(messages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async addFortunetellerBonusCashable(advisorId: number, pts: number): Promise<void> {
+    await db.update(fortunetellerProfiles)
+      .set({ bonusCashable: sql`${fortunetellerProfiles.bonusCashable} + ${pts}` })
+      .where(eq(fortunetellerProfiles.userId, advisorId));
+  }
+
+  async getFortunetellerBonusCashable(advisorId: number): Promise<number> {
+    const profile = await this.getFortunetellerProfile(advisorId);
+    return profile?.bonusCashable ?? 0;
+  }
+
+  async settleTreatmentMessagesInRoom(roomId: string): Promise<number> {
+    const now = new Date();
+    const result = await db.update(messages)
+      .set({ earnedByAdvisor: true })
+      .where(and(
+        eq(messages.roomId, roomId),
+        eq(messages.category, "treatment"),
+        eq(messages.isLocked, false),
+        eq(messages.earnedByAdvisor, false),
+        sql`${messages.unlockedAt} IS NOT NULL`
+      ))
+      .returning({ costPt: messages.costPt });
+    return result.reduce((sum, m) => sum + (m.costPt ?? 0), 0);
+  }
+
+  async getExpiredUnsettledTreatmentMessages(): Promise<{ id: number; roomId: string; costPt: number; querentId: number }[]> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const result = await db.execute(sql`
+      SELECT m.id, m.room_id, m.cost_pt, r.querent_id
+      FROM messages m
+      INNER JOIN rooms r ON r.id = m.room_id
+      WHERE m.category = 'treatment'
+        AND m.is_locked = false
+        AND m.earned_by_advisor = false
+        AND m.unlocked_at IS NOT NULL
+        AND m.unlocked_at < ${cutoff}
+    `);
+    return (result.rows as any[]).map((row: any) => ({
+      id: Number(row.id),
+      roomId: String(row.room_id),
+      costPt: Number(row.cost_pt ?? 0),
+      querentId: Number(row.querent_id),
+    }));
+  }
+
+  async refundTreatmentMessage(id: number, querentId: number, pts: number): Promise<void> {
+    await db.update(messages).set({ earnedByAdvisor: true }).where(eq(messages.id, id));
+    if (pts > 0) {
+      await db.update(querentProfiles)
+        .set({ points: sql`${querentProfiles.points} + ${pts}` })
+        .where(eq(querentProfiles.userId, querentId));
+    }
+  }
+
+  async addQuerentPoints(userId: number, pts: number): Promise<void> {
+    await db.update(querentProfiles)
+      .set({ points: sql`${querentProfiles.points} + ${pts}` })
+      .where(eq(querentProfiles.userId, userId));
   }
 }
 

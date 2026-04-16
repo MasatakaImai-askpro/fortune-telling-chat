@@ -581,6 +581,22 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
       if (data.type === "room_init") {
         setRoom({ id: data.room_id });
       }
+      if (data.type === "message_unlocked") {
+        setThreads((prev) => {
+          const t = prev[advisor.id];
+          if (!t) return prev;
+          return { ...prev, [advisor.id]: { ...t, messages: t.messages.map((m: any) => m.id === data.message_id ? { ...m, is_locked: false } : m) } };
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+      }
+      if (data.type === "treatment_refunded") {
+        setThreads((prev) => {
+          const t = prev[advisor.id];
+          if (!t) return prev;
+          return { ...prev, [advisor.id]: { ...t, messages: t.messages.map((m: any) => m.id === data.message_id ? { ...m, refunded: true } : m) } };
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+      }
     };
     return () => { sock.close(); };
   }, [roomLoading, advisor?.id, room?.id, setThreads, scrollBottom]);
@@ -1169,11 +1185,38 @@ export default function Top() {
   const [threads, setThreads] = useState<ThreadsMap>({});
   const [activeTab, setActiveTab] = useState("home");
   const [selectedAdvisorId, setSelectedAdvisorId] = useState<number | null>(() => storage.load("selectedAdvisorId", null));
+  const [paymentBanner, setPaymentBanner] = useState<{ type: "success" | "cancel"; text: string } | null>(null);
 
-  const { data: querentInfo = null } = useQuery<QuerentInfo>({
+  const { data: querentInfo = null, refetch: refetchQuerentInfo } = useQuery<QuerentInfo>({
     queryKey: ["/api/get_querent_info"],
     enabled: !!user && user.role === "1",
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (payment === "success") {
+      const type = params.get("type");
+      const pts = params.get("pts");
+      const planParam = params.get("plan");
+      let text = "決済が完了しました";
+      if (type === "points" && pts) text = `${parseInt(pts).toLocaleString()}pt を購入しました！残高に反映されます。`;
+      else if (planParam) text = `${planParam === "premium" ? "プレミアム" : "スタンダード"}プランに加入しました！`;
+      setPaymentBanner({ type: "success", text });
+      setActiveTab("account");
+      window.history.replaceState({}, "", "/");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/my_subscription_slots"] });
+        refetchQuerentInfo();
+      }, 1500);
+      setTimeout(() => setPaymentBanner(null), 8000);
+    } else if (payment === "cancel") {
+      setPaymentBanner({ type: "cancel", text: "決済がキャンセルされました。" });
+      window.history.replaceState({}, "", "/");
+      setTimeout(() => setPaymentBanner(null), 5000);
+    }
+  }, []);
 
   useEffect(() => {
     if (querentInfo) {
@@ -1212,6 +1255,13 @@ export default function Top() {
 
   return (
     <div className="min-h-screen bg-[#fdf2f8] text-gray-900">
+      {paymentBanner && (
+        <div className={`fixed top-4 left-4 right-4 z-50 rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3 text-sm font-semibold ${paymentBanner.type === "success" ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}
+          data-testid="banner-payment-result">
+          <span className="flex-1">{paymentBanner.type === "success" ? "✅" : "❌"} {paymentBanner.text}</span>
+          <button onClick={() => setPaymentBanner(null)} className="text-white/80 hover:text-white text-xs">✕</button>
+        </div>
+      )}
       <Header user={user} loading={loading} point={querentInfo?.point} subscriptionActive={querentInfo?.subscription} onGoPlan={() => setActiveTab("account")} onLogout={handleLogout} />
       <main className="px-4 pb-28">
         {activeTab === "home" && <HomeTab advisors={advisors} favorites={favorites} onFav={toggleFavorite} onStartChat={startChat} />}

@@ -26,6 +26,7 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
   businessHours: varchar("business_hours", { length: 100 }).notNull().default(""),
   longIntro: text("long_intro").notNull().default(""),
   freeNote: text("free_note").notNull().default(""),
+  bonusCashable: integer("bonus_cashable").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -82,6 +83,8 @@ export const messages = pgTable("messages", {
   isReadByQuerent: boolean("is_read_by_querent").notNull().default(false),
   isReadByFortuneteller: boolean("is_read_by_fortuneteller").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  unlockedAt: timestamp("unlocked_at"),
+  earnedByAdvisor: boolean("earned_by_advisor").default(false),
 });
 
 export const subscriptions = pgTable("subscriptions", {

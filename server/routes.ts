@@ -362,8 +362,10 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
       const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
       const rankInfo = computeRankFromRevenue(revenue);
+      const bonusCashable = await storage.getFortunetellerBonusCashable(user.id);
       const withdrawn = await storage.getFortunetellerWithdrawnTotal(user.id);
-      const availablePoints = Math.max(0, rankInfo.cashable - withdrawn);
+      const totalCashable = rankInfo.cashable + bonusCashable;
+      const availablePoints = Math.max(0, totalCashable - withdrawn);
       const yenAmount = Math.floor(availablePoints * 1.5);
       const transferFee = 1000;
       const netAmount = Math.max(0, yenAmount - transferFee);
@@ -371,7 +373,9 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         total_revenue: revenue,
         rank: rankInfo.rank,
         rank_label: rankInfo.label,
-        total_cashable: rankInfo.cashable,
+        total_cashable: totalCashable,
+        rank_cashable: rankInfo.cashable,
+        bonus_cashable: bonusCashable,
         withdrawn,
         available_points: availablePoints,
         yen_amount: yenAmount,
@@ -1111,12 +1115,27 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
-      const sig = req.headers["stripe-signature"] as string;
-      if (!sig) return res.status(400).json({ error: "Missing signature" });
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      let event: any;
 
-      const event = stripe.webhooks.constructEventAsync
-        ? await stripe.webhooks.constructEventAsync(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "")
-        : stripe.webhooks.constructEvent(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "");
+      if (webhookSecret) {
+        const sig = req.headers["stripe-signature"] as string;
+        if (!sig) return res.status(400).json({ error: "Missing signature" });
+        try {
+          event = stripe.webhooks.constructEventAsync
+            ? await stripe.webhooks.constructEventAsync(req.body as Buffer, sig, webhookSecret)
+            : stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+        } catch (sigErr: any) {
+          return res.status(400).json({ error: `Webhook signature failed: ${sigErr.message}` });
+        }
+      } else {
+        try {
+          const body = req.body instanceof Buffer ? req.body.toString() : JSON.stringify(req.body);
+          event = JSON.parse(body);
+        } catch {
+          event = req.body;
+        }
+      }
 
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
@@ -1125,10 +1144,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         if (purchaseType === "points") {
           const points = parseInt(session.metadata?.points || "0");
           if (querentId && points > 0) {
-            const profile = await storage.getQuerentProfile(querentId);
-            if (profile) {
-              await storage.updateQuerentProfile(querentId, { points: (profile.points || 0) + points });
-            }
+            await storage.addQuerentPoints(querentId, points);
           }
         } else {
           const planType = session.metadata?.plan_type || "standard";

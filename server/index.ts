@@ -242,6 +242,13 @@ wss.on("connection", async (ws, req) => {
             const hasReplied = await storage.hasFortunetellerRepliedInRoom(roomId, roomData.fortunetellerId, 30);
             if (!hasReplied) {
               subscriptionBonus = 2000;
+              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, 2000);
+            }
+          }
+          if (category !== "treatment") {
+            const earnedFromTreatment = await storage.settleTreatmentMessagesInRoom(roomId);
+            if (earnedFromTreatment > 0) {
+              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, earnedFromTreatment);
             }
           }
         }
@@ -560,11 +567,33 @@ async function backfillStylesAndMethods() {
   }
 }
 
+async function processExpiredTreatmentRefunds() {
+  try {
+    const expired = await storage.getExpiredUnsettledTreatmentMessages();
+    for (const msg of expired) {
+      await storage.refundTreatmentMessage(msg.id, msg.querentId, msg.costPt);
+      if (msg.costPt > 0) {
+        broadcastToRoom(msg.roomId, {
+          type: "treatment_refunded",
+          message_id: String(msg.id),
+          refunded_pt: msg.costPt,
+        });
+        log(`Treatment message ${msg.id} refunded ${msg.costPt}pt to querent ${msg.querentId}`);
+      }
+    }
+  } catch (e: any) {
+    log(`Treatment refund job error: ${e.message}`);
+  }
+}
+
 (async () => {
   await seedDatabase();
   await seedAdminAndSubscriptions();
   await backfillStylesAndMethods();
   await backfillSampleImages();
+
+  setInterval(processExpiredTreatmentRefunds, 15 * 60 * 1000);
+  setTimeout(processExpiredTreatmentRefunds, 5000);
 
   if (app.get("env") === "development") {
     await setupVite(app, server);
