@@ -54,11 +54,11 @@ export const querentProfiles = pgTable("querent_profiles", {
 
 export const bankInfo = pgTable("bank_info", {
   userId: integer("user_id").primaryKey().references(() => fortunetellerProfiles.userId, { onDelete: "cascade" }),
-  name: varchar("name", { length: 30 }),
-  branchName: varchar("branch_name", { length: 20 }),
-  accountType: varchar("account_type", { length: 5 }),
-  accountNumber: varchar("account_number", { length: 7 }),
-  accountHolderName: varchar("account_holder_name", { length: 20 }),
+  name: varchar("name", { length: 100 }),
+  branchName: varchar("branch_name", { length: 100 }),
+  accountType: varchar("account_type", { length: 20 }),
+  accountNumber: varchar("account_number", { length: 20 }),
+  accountHolderName: varchar("account_holder_name", { length: 100 }),
 });
 
 export const rooms = pgTable("rooms", {

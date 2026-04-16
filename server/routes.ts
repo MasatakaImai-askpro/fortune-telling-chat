@@ -1111,59 +1111,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     }
   });
 
-  app.post("/api/stripe/webhook", async (req: Request, res: Response) => {
-    try {
-      const { getUncachableStripeClient } = await import("./stripeClient");
-      const stripe = await getUncachableStripeClient();
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-      let event: any;
-
-      if (webhookSecret) {
-        const sig = req.headers["stripe-signature"] as string;
-        if (!sig) return res.status(400).json({ error: "Missing signature" });
-        try {
-          event = stripe.webhooks.constructEventAsync
-            ? await stripe.webhooks.constructEventAsync(req.body as Buffer, sig, webhookSecret)
-            : stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-        } catch (sigErr: any) {
-          return res.status(400).json({ error: `Webhook signature failed: ${sigErr.message}` });
-        }
-      } else {
-        try {
-          const body = req.body instanceof Buffer ? req.body.toString() : JSON.stringify(req.body);
-          event = JSON.parse(body);
-        } catch {
-          event = req.body;
-        }
-      }
-
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object as any;
-        const querentId = parseInt(session.metadata?.querent_id);
-        const purchaseType = session.metadata?.purchase_type;
-        if (purchaseType === "points") {
-          const points = parseInt(session.metadata?.points || "0");
-          if (querentId && points > 0) {
-            await storage.addQuerentPoints(querentId, points);
-          }
-        } else {
-          const planType = session.metadata?.plan_type || "standard";
-          if (querentId) {
-            const amount = planType === "premium" ? 50000 : 20000;
-            const now = new Date();
-            const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-            await storage.cancelSubscription(querentId).catch(() => {});
-            await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
-            await storage.updateQuerentProfile(querentId, { isSubscription: true });
-          }
-        }
-      }
-      res.json({ received: true });
-    } catch (e: any) {
-      res.status(400).json({ error: e.message });
-    }
-  });
-
   app.get("/api/my_subscription_slots", requireAuth, async (req: Request, res: Response) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -1429,24 +1376,25 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
         if (imageType === "icon") {
           if (Math.abs(ratio - 1) > 0.15) return res.status(400).json({ error: "アイコンは正方形（1:1）で提供してください" });
-          if (req.file.size > 2 * 1024 * 1024) return res.status(400).json({ error: "アイコンは2MB以内にしてください" });
+          if (req.file.size > 5 * 1024 * 1024) return res.status(400).json({ error: "アイコンは5MB以内にしてください" });
         } else {
           if (ratio < 16 / 10 || ratio > 2.1) return res.status(400).json({ error: "バナーは横長（16:9〜2:1）で提供してください" });
-          if (req.file.size > 5 * 1024 * 1024) return res.status(400).json({ error: "バナーは5MB以内にしてください" });
+          if (req.file.size > 10 * 1024 * 1024) return res.status(400).json({ error: "バナーは10MB以内にしてください" });
         }
 
-        if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-        const filename = `${imageType}_${userId}_${Date.now()}.webp`;
-        const outPath = path.join(UPLOADS_DIR, filename);
-        await sharpImg.webp({ quality: 85 }).toFile(outPath);
-        const imageUrl = `/uploads/${filename}`;
+        const webpBuffer = imageType === "icon"
+          ? await sharpImg.resize(400, 400, { fit: "cover" }).webp({ quality: 85 }).toBuffer()
+          : await sharpImg.resize(1200, 675, { fit: "cover" }).webp({ quality: 85 }).toBuffer();
+
+        const base64 = webpBuffer.toString("base64");
+        const dataUrl = `data:image/webp;base64,${base64}`;
 
         const data: any = {};
-        if (imageType === "icon") data.iconImage = imageUrl;
-        else data.profileImage = imageUrl;
+        if (imageType === "icon") data.iconImage = dataUrl;
+        else data.profileImage = dataUrl;
         await storage.updateFortunetellerProfile(userId, data);
 
-        res.json({ url: imageUrl, image_type: imageType });
+        res.json({ url: dataUrl, image_type: imageType });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }

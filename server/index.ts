@@ -24,24 +24,53 @@ app.post(
     try {
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
-      const sig = req.headers["stripe-signature"] as string;
-      if (!sig) return res.status(400).json({ error: "Missing signature" });
-      const event = stripe.webhooks.constructEvent(req.body as Buffer, sig, process.env.STRIPE_WEBHOOK_SECRET || "");
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+      let event: any;
+
+      if (webhookSecret) {
+        const sig = req.headers["stripe-signature"] as string;
+        if (!sig) return res.status(400).json({ error: "Missing signature" });
+        try {
+          event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+        } catch (sigErr: any) {
+          return res.status(400).json({ error: `Webhook signature failed: ${sigErr.message}` });
+        }
+      } else {
+        try {
+          const body = req.body instanceof Buffer ? req.body.toString("utf8") : JSON.stringify(req.body);
+          event = JSON.parse(body);
+        } catch {
+          event = req.body;
+        }
+      }
+
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
         const querentId = parseInt(session.metadata?.querent_id);
-        const planType = session.metadata?.plan_type || "standard";
-        if (querentId) {
-          const amount = planType === "premium" ? 50000 : 20000;
-          const now = new Date();
-          const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-          await storage.cancelSubscription(querentId).catch(() => {});
-          await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
-          await storage.updateQuerentProfile(querentId, { isSubscription: true });
+        const purchaseType = session.metadata?.purchase_type;
+
+        if (purchaseType === "points") {
+          const points = parseInt(session.metadata?.points || "0");
+          if (querentId && points > 0) {
+            await storage.addQuerentPoints(querentId, points);
+            log(`Webhook: added ${points}pt to querent ${querentId}`);
+          }
+        } else {
+          const planType = session.metadata?.plan_type || "standard";
+          if (querentId) {
+            const amount = planType === "premium" ? 50000 : 20000;
+            const now = new Date();
+            const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            await storage.cancelSubscription(querentId).catch(() => {});
+            await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
+            await storage.updateQuerentProfile(querentId, { isSubscription: true });
+            log(`Webhook: subscription (${planType}) activated for querent ${querentId}`);
+          }
         }
       }
       res.json({ received: true });
     } catch (e: any) {
+      log(`Webhook error: ${e.message}`);
       res.status(400).json({ error: e.message });
     }
   }
