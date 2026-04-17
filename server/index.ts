@@ -289,7 +289,7 @@ wss.on("connection", async (ws, req) => {
               const roomData3 = roomData2;
               if (roomData3) {
                 const ftProfile2 = await storage.getFortunetellerProfile(roomData3.fortunetellerId);
-                const storedRank2 = ftProfile2?.rank || "BRONZE";
+                const storedRank2 = ftProfile2?.rank || "NORMAL";
                 const RANK_MULT2: Record<string, number> = {
                   DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
                   PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,
@@ -308,7 +308,7 @@ wss.on("connection", async (ws, req) => {
             const roomData = await storage.getRoom(roomId);
             if (roomData) {
               const ftProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
-              const storedRank = ftProfile?.rank || "BRONZE";
+              const storedRank = ftProfile?.rank || "NORMAL";
               const RANK_MULT: Record<string, number> = {
                 DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
                 PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,

@@ -592,7 +592,8 @@ export const RANK_THRESHOLDS = [
   { rank: "PLATINUM", label: "プラチナ", minRevenue: 250000, cashable: 125000 },
   { rank: "GOLD", label: "ゴールド", minRevenue: 160000, cashable: 80000 },
   { rank: "SILVER", label: "シルバー", minRevenue: 80000, cashable: 40000 },
-  { rank: "BRONZE", label: "ブロンズ", minRevenue: 0, cashable: 0 },
+  { rank: "BRONZE", label: "ブロンズ", minRevenue: 30000, cashable: 0 },
+  { rank: "NORMAL", label: "ノーマル", minRevenue: 0, cashable: 0 },
 ];
 
 export function computeRankFromRevenue(revenue: number): { rank: string; label: string; cashable: number } {
@@ -603,5 +604,5 @@ export function computeRankFromRevenue(revenue: number): { rank: string; label: 
       return { rank: tier.rank, label: tier.label, cashable };
     }
   }
-  return { rank: "BRONZE", label: "ブロンズ", cashable: 0 };
+  return { rank: "NORMAL", label: "ノーマル", cashable: 0 };
 }
