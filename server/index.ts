@@ -256,8 +256,13 @@ wss.on("connection", async (ws, req) => {
           if (querentSub) {
             const hasReplied = await storage.hasFortunetellerRepliedInRoom(roomId, roomData.fortunetellerId, 30);
             if (!hasReplied) {
-              subscriptionBonus = 2000;
-              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, 2000);
+              const subPlanType = (querentSub as any).planType || "standard";
+              const ftBonusProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
+              const ftBonusRank = ftBonusProfile?.rank || "NORMAL";
+              const PREMIUM_HIGH_RANKS = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+              const bonus = (subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftBonusRank)) ? 5000 : 2000;
+              subscriptionBonus = bonus;
+              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, bonus);
             }
           }
           if (category !== "treatment") {
@@ -277,12 +282,18 @@ wss.on("connection", async (ws, req) => {
           const activeSub = await storage.getActiveSubscription(userId);
           if (activeSub) {
             const subStart = activeSub.startDate;
+            const subPlanType2 = (activeSub as any).planType || "standard";
             const slotAdvisors = await storage.getSubscriptionSlotAdvisors(userId, subStart);
             const roomData2 = await storage.getRoom(roomId);
             const advisorId = roomData2?.fortunetellerId;
+            // スタンダードはプラチナ+以上の占い師はスロット対象外
+            const PREMIUM_ONLY_RANKS2 = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+            const ftSlotProfile = advisorId ? await storage.getFortunetellerProfile(advisorId) : null;
+            const advisorRank2 = ftSlotProfile?.rank || "NORMAL";
+            const isEligibleForPlan = subPlanType2 === "premium" || !PREMIUM_ONLY_RANKS2.includes(advisorRank2);
             const isInSlot = advisorId ? slotAdvisors.includes(advisorId) : false;
             const slotFull = slotAdvisors.length >= 5;
-            if (isInSlot || (!slotFull && advisorId)) {
+            if (isEligibleForPlan && (isInSlot || (!slotFull && advisorId))) {
               costPt = 0;
               msgCategory = "free";
             } else {
