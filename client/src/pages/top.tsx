@@ -617,11 +617,12 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   };
 
   const isSub = plan === "subscription" && subscriptionActive;
-  const unlockTreatment = async (msgId: string, costPt: number) => {
+  const unlockTreatment = async (msgId: string, costPt: number, category: string = "treatment") => {
     if (unlockingId) return;
+    const label = category === "length_paying" ? "有料メッセージ" : "施術メッセージ";
     const confirmMsg = isSub
-      ? "この施術メッセージを開封しますか？\nサブスク会員のためポイント消費はありません。"
-      : `この施術メッセージを開封しますか？\n${costPt}pt（約${Math.round(costPt * YEN_PER_POINT).toLocaleString()}円）を消費します。`;
+      ? `この${label}を開封しますか？\nサブスク会員のためポイント消費はありません。`
+      : `この${label}を開封しますか？\n${costPt}pt（約${Math.round(costPt * YEN_PER_POINT).toLocaleString()}円）を消費します。`;
     const doUnlock = confirm(confirmMsg);
     if (!doUnlock) return;
     setUnlockingId(msgId);
@@ -740,12 +741,14 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                   {m.category === "treatment" && m.title && !m.is_locked && (
                     <div className={cls("text-[11px] font-bold mb-1 border-b pb-1", m.sender === "querent" ? "border-white/20" : "border-pink-200")}>{m.title}</div>
                   )}
-                  {m.is_locked && m.category === "treatment" ? (
+                  {m.is_locked && (m.category === "treatment" || m.category === "length_paying") ? (
                     <div className="space-y-2">
                       {m.title && <div className="text-[11px] font-bold text-gray-900">{m.title}</div>}
-                      <div className="text-xs text-gray-500 italic">[施術メッセージ: {m.cost_pt ?? 0}pt]</div>
+                      <div className="text-xs text-gray-500 italic">
+                        {m.category === "treatment" ? `[施術メッセージ: ${m.cost_pt ?? 0}pt]` : `[有料メッセージ: ${m.cost_pt ?? 0}pt]`}
+                      </div>
                       <button
-                        onClick={() => unlockTreatment(String(m.id), m.cost_pt ?? 0)}
+                        onClick={() => unlockTreatment(String(m.id), m.cost_pt ?? 0, m.category)}
                         disabled={unlockingId === String(m.id)}
                         className="text-[11px] bg-amber-500 text-gray-900 font-semibold px-3 py-1 rounded-lg hover-elevate active-elevate-2 disabled:opacity-50"
                         data-testid={`button-unlock-${m.id}`}
@@ -1060,7 +1063,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               <div className="mt-2 text-xs text-emerald-600">サブスク中は最大5人の占い師と無料チャット（施術・6人目以降はポイント必要）</div>
             )}
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {[{ yen: 500, pt: Math.floor(500 / YEN_PER_POINT) }, { yen: 1000, pt: Math.floor(1000 / YEN_PER_POINT) }, { yen: 3000, pt: Math.floor(3000 / YEN_PER_POINT) }, { yen: 5000, pt: Math.floor(5000 / YEN_PER_POINT) }, { yen: 10000, pt: Math.floor(10000 / YEN_PER_POINT) }, { yen: 30000, pt: Math.floor(30000 / YEN_PER_POINT) }].map((opt) => (
+              {[{ yen: 600, pt: 400 }, { yen: 1500, pt: 1000 }, { yen: 3000, pt: 2000 }, { yen: 6000, pt: 4000 }, { yen: 15000, pt: 10000 }, { yen: 30000, pt: 20000 }].map((opt) => (
                 <button key={opt.yen} onClick={() => handlePointPurchase(opt.yen)} className="rounded-xl px-2 py-2 text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 transition-colors disabled:opacity-50" data-testid={`button-buy-${opt.yen}`}>
                   <div>{opt.yen.toLocaleString()}円</div>
                   <div className="text-[10px] opacity-80">{opt.pt.toLocaleString()}pt</div>

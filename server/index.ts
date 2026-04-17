@@ -184,7 +184,7 @@ wss.on("connection", async (ws, req) => {
         messages: msgs.map((m) => ({
           id: String(m.id),
           sender: m.sender,
-          text: m.isLocked && m.category === "treatment" ? null : m.text,
+          text: m.isLocked && (m.category === "treatment" || m.category === "length_paying") ? null : m.text,
           title: m.title || null,
           category: m.category || "free",
           cost_pt: m.costPt,
@@ -345,7 +345,7 @@ wss.on("connection", async (ws, req) => {
         message: {
           id: String(msg.id),
           sender: msg.sender,
-          text: msg.isLocked && msg.category === "treatment" ? null : msg.text,
+          text: msg.isLocked && (msg.category === "treatment" || msg.category === "length_paying") ? null : msg.text,
           title: msg.title || null,
           category: msg.category || "free",
           cost_pt: msg.costPt,

@@ -793,7 +793,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const msg = await storage.getMessage(Number(message_id));
       if (!msg) return res.status(404).json({ error: "メッセージが見つかりません" });
       if (!msg.isLocked) return res.status(400).json({ error: "このメッセージは既に開封済みです" });
-      if (msg.category !== "treatment") return res.status(400).json({ error: "施術メッセージのみ開封できます" });
+      if (msg.category !== "treatment" && msg.category !== "length_paying") return res.status(400).json({ error: "施術・有料メッセージのみ開封できます" });
 
       const room = await storage.getRoom(msg.roomId);
       if (!room || room.querentId !== user.id) return res.status(403).json({ error: "権限がありません" });
@@ -1156,9 +1156,10 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
-      const schema = z.object({ amount_yen: z.number().int().min(500) });
+      const POINT_TIERS: Record<number, number> = { 600: 400, 1500: 1000, 3000: 2000, 6000: 4000, 15000: 10000, 30000: 20000 };
+      const schema = z.object({ amount_yen: z.number().int().refine((v) => v in POINT_TIERS, { message: "無効な金額です" }) });
       const { amount_yen } = schema.parse(req.body);
-      const pts = Math.floor(amount_yen / 1.5);
+      const pts = POINT_TIERS[amount_yen];
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
       const origin = req.headers.origin || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;

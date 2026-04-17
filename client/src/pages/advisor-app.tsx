@@ -685,25 +685,34 @@ function MenuSettings() {
               <div className="text-xs font-semibold text-gray-600 mb-1">{type === "treatment" ? "🌟 施術メニュー" : "🔮 鑑定メニュー"}</div>
               {typedMenus.length === 0 && <div className="text-xs text-gray-400 pl-2">メニューがありません</div>}
               {typedMenus.map((m) => (
-                <div key={m.id} className="bg-white border border-pink-200 rounded-xl p-2.5 flex items-center gap-2 mb-1.5">
+                <div key={m.id} className="bg-white border border-pink-200 rounded-xl p-2.5 mb-1.5">
                   {editId === m.id ? (
-                    <>
+                    <div className="space-y-2">
                       <input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={50}
-                        className="flex-1 rounded-lg bg-pink-50 border border-pink-200 px-2 py-1 text-xs" />
-                      <input value={editPt} onChange={(e) => setEditPt(e.target.value.replace(/\D/g, ""))} maxLength={6}
-                        className="w-18 rounded-lg bg-pink-50 border border-pink-200 px-2 py-1 text-xs" />
-                      <button onClick={() => saveEdit(m.id)} className="text-xs px-2 py-1 rounded-lg bg-emerald-500 text-white">保存</button>
-                      <button onClick={() => setEditId(null)} className="text-xs px-2 py-1 rounded-lg bg-gray-200 text-gray-700">取消</button>
-                    </>
+                        placeholder="メニュー名" className="w-full rounded-lg bg-pink-50 border border-pink-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400" />
+                      <div className="flex items-center gap-2">
+                        <input value={editPt} onChange={(e) => setEditPt(e.target.value.replace(/\D/g, ""))} maxLength={6}
+                          placeholder="ポイント数" className="flex-1 rounded-lg bg-pink-50 border border-pink-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-pink-400" />
+                        <span className="text-xs text-gray-500 flex-shrink-0">pt</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => saveEdit(m.id)} disabled={saving}
+                          className="flex-1 text-xs py-1.5 rounded-lg bg-emerald-500 text-white font-semibold disabled:opacity-50">
+                          {saving ? "保存中..." : "保存"}
+                        </button>
+                        <button onClick={() => setEditId(null)}
+                          className="flex-1 text-xs py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-gray-700">取消</button>
+                      </div>
+                    </div>
                   ) : (
-                    <>
+                    <div className="flex items-center gap-2">
                       <span className="flex-1 text-xs text-gray-900">{m.name}</span>
                       <span className="text-xs text-pink-600 font-semibold">{m.required_pt.toLocaleString()}pt</span>
                       <button onClick={() => { setEditId(m.id); setEditName(m.name); setEditPt(m.required_pt.toString()); }}
                         className="text-[10px] px-2 py-1 rounded-lg bg-pink-50 border border-pink-200 text-gray-600">編集</button>
                       <button onClick={() => deleteMenu(m.id)}
                         className="text-[10px] px-2 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600">削除</button>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
