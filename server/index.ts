@@ -291,8 +291,8 @@ wss.on("connection", async (ws, req) => {
                 const revenue = await storage.getFortuneteller6MonthRevenue(roomData3.fortunetellerId);
                 const rankInfo = computeRankFromRevenue(revenue);
                 const RANK_MULT2: Record<string, number> = {
-                  DIAMOND_PLUS: 7, DIAMOND: 6, PLATINUM_PLUS: 5,
-                  PLATINUM: 4, GOLD: 3, SILVER: 2, BRONZE: 1,
+                  DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
+                  PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,
                 };
                 const mult2 = RANK_MULT2[rankInfo.rank] || 1;
                 costPt = text.length * mult2;
@@ -310,8 +310,8 @@ wss.on("connection", async (ws, req) => {
               const revenue = await storage.getFortuneteller6MonthRevenue(roomData.fortunetellerId);
               const rankInfo = computeRankFromRevenue(revenue);
               const RANK_MULT: Record<string, number> = {
-                DIAMOND_PLUS: 7, DIAMOND: 6, PLATINUM_PLUS: 5,
-                PLATINUM: 4, GOLD: 3, SILVER: 2, BRONZE: 1,
+                DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
+                PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,
               };
               const mult = RANK_MULT[rankInfo.rank] || 1;
               costPt = text.length * mult;

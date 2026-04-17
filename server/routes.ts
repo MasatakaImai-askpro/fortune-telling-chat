@@ -397,8 +397,10 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       }
       const revenue = await storage.getFortuneteller6MonthRevenue(user.id);
       const rankInfo = computeRankFromRevenue(revenue);
+      const bonusCashable = await storage.getFortunetellerBonusCashable(user.id);
       const withdrawn = await storage.getFortunetellerWithdrawnTotal(user.id);
-      const availablePoints = Math.max(0, rankInfo.cashable - withdrawn);
+      const totalCashable = rankInfo.cashable + bonusCashable;
+      const availablePoints = Math.max(0, totalCashable - withdrawn);
       if (availablePoints <= 0) {
         return res.status(400).json({ error: "申請可能なポイントがありません" });
       }
@@ -479,7 +481,11 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           querent_name: querent?.name || "不明",
           fortuneteller_name: ft?.name || "不明",
           fortuneteller_icon: ft?.iconImage || "",
-          last_message: lastMsg?.text || (lastMsg?.category === "treatment" ? "[施術メッセージ]" : ""),
+          last_message: lastMsg
+            ? (lastMsg.isLocked && (lastMsg.category === "treatment" || lastMsg.category === "length_paying")
+                ? (lastMsg.category === "treatment" ? "[施術メッセージ]" : "[有料メッセージ]")
+                : lastMsg.text || "")
+            : "",
           last_message_sender: lastMsg?.sender || null,
           last_at: lastMsg?.createdAt.toISOString() || room.createdAt.toISOString(),
           unread_count: unreadCount,

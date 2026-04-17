@@ -45,9 +45,13 @@ type AdminUser = {
 };
 
 const rankLabel: Record<string, string> = {
-  BRONZE: "ブロンズ", SILVER: "シルバー", GOLD: "ゴールド",
+  NORMAL: "ノーマル", BRONZE: "ブロンズ", SILVER: "シルバー", GOLD: "ゴールド",
   PLATINUM: "プラチナ", PLATINUM_PLUS: "プラチナ+",
   DIAMOND: "ダイヤモンド", DIAMOND_PLUS: "ダイヤモンド+",
+};
+const rankMult: Record<string, number> = {
+  NORMAL: 6, BRONZE: 10, SILVER: 14, GOLD: 16,
+  PLATINUM: 18, PLATINUM_PLUS: 20, DIAMOND: 22, DIAMOND_PLUS: 24,
 };
 const statusLabel: Record<string, string> = { pending: "申請中", approved: "承認済み", transferred: "送金済み" };
 const statusColor: Record<string, string> = {
@@ -347,14 +351,14 @@ function UserManagementTab() {
               )}
               {editingUser.role === "2" && (
                 <div>
-                  <label className="text-[11px] text-gray-600 block mb-1">ランク</label>
-                  <div className="flex gap-1">
-                    {["SILVER", "GOLD", "PLATINUM"].map((r) => (
+                  <label className="text-[11px] text-gray-600 block mb-1">ランク（1文字あたりの消費pt）</label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {["NORMAL", "BRONZE", "SILVER", "GOLD", "PLATINUM", "PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"].map((r) => (
                       <button key={r} onClick={() => setEditRank(r)} data-testid={`button-edit-rank-${r}`}
-                        className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${
-                          editRank === r ? "bg-pink-600 border-pink-500 text-white" : "bg-pink-50 border-pink-200 text-gray-500"
+                        className={`text-[10px] px-2 py-1.5 rounded-lg border transition-colors text-left ${
+                          editRank === r ? "bg-pink-600 border-pink-500 text-white" : "bg-pink-50 border-pink-200 text-gray-600"
                         }`}>
-                        {rankLabel[r]}
+                        {rankLabel[r]} <span className="opacity-70">{rankMult[r]}pt</span>
                       </button>
                     ))}
                   </div>

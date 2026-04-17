@@ -9,13 +9,14 @@ const API_BASE = "";
 const YEN_PER_POINT = 1.5;
 
 const RANK_TABLE: Record<string, { key: string; jp: string; mult: number; color: string }> = {
-  DIAMOND_PLUS: { key: "DIAMOND_PLUS", jp: "ダイヤモンド+", mult: 7, color: "from-cyan-200 to-blue-500" },
-  DIAMOND: { key: "DIAMOND", jp: "ダイヤモンド", mult: 6, color: "from-cyan-100 to-sky-400" },
-  PLATINUM_PLUS: { key: "PLATINUM_PLUS", jp: "プラチナ+", mult: 5, color: "from-violet-200 to-purple-500" },
-  PLATINUM: { key: "PLATINUM", jp: "プラチナ", mult: 4, color: "from-slate-200 to-zinc-500" },
-  GOLD: { key: "GOLD", jp: "ゴールド", mult: 3, color: "from-amber-200 to-orange-500" },
-  SILVER: { key: "SILVER", jp: "シルバー", mult: 2, color: "from-neutral-200 to-gray-400" },
-  BRONZE: { key: "BRONZE", jp: "ブロンズ", mult: 1, color: "from-orange-300 to-amber-700" },
+  DIAMOND_PLUS: { key: "DIAMOND_PLUS", jp: "ダイヤモンド+", mult: 24, color: "from-cyan-200 to-blue-500" },
+  DIAMOND: { key: "DIAMOND", jp: "ダイヤモンド", mult: 22, color: "from-cyan-100 to-sky-400" },
+  PLATINUM_PLUS: { key: "PLATINUM_PLUS", jp: "プラチナ+", mult: 20, color: "from-violet-200 to-purple-500" },
+  PLATINUM: { key: "PLATINUM", jp: "プラチナ", mult: 18, color: "from-slate-200 to-zinc-500" },
+  GOLD: { key: "GOLD", jp: "ゴールド", mult: 16, color: "from-amber-200 to-orange-500" },
+  SILVER: { key: "SILVER", jp: "シルバー", mult: 14, color: "from-neutral-200 to-gray-400" },
+  BRONZE: { key: "BRONZE", jp: "ブロンズ", mult: 10, color: "from-orange-300 to-amber-700" },
+  NORMAL: { key: "NORMAL", jp: "ノーマル", mult: 6, color: "from-gray-100 to-gray-300" },
 };
 const getRankInfo = (rank: string) => RANK_TABLE[rank] || RANK_TABLE.BRONZE;
 
@@ -1023,7 +1024,6 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
                 <div className="mt-2 text-2xl font-bold text-gray-900">20,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
                 <ul className="mt-2 space-y-1 text-xs text-gray-600">
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナランクまでの占い師を<b>5人まで</b>登録可能</li>
-                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>占い師へのポイント分配: <b>2,000pt/月 × 1人</b></li>
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
                 </ul>
                 <button onClick={() => handleSubscribe("standard")} disabled={subLoading} data-testid="button-subscribe-standard"
@@ -1041,8 +1041,6 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
                 <div className="mt-2 text-2xl font-bold text-gray-900">50,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
                 <ul className="mt-2 space-y-1 text-xs text-gray-600">
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>ランク問わず占い師を<b>5人まで</b>登録可能</li>
-                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナまで: <b>2,000pt/月 × 1人</b></li>
-                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナ+以上: <b>5,000pt/月 × 1人</b></li>
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
                 </ul>
                 <button onClick={() => handleSubscribe("premium")} disabled={subLoading} data-testid="button-subscribe-premium"
@@ -1057,7 +1055,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
             <div className="font-semibold text-gray-900">ポイント制</div>
             <div className="text-sm text-gray-600">1pt={YEN_PER_POINT}円。文字数×ランク倍率で消費。</div>
             <div className="mt-2 flex items-center gap-3 flex-wrap">
-              <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b>（約{yen(queInfo.point)}）</span>
+              <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b></span>
             </div>
             {queInfo.subscription && (
               <div className="mt-2 text-xs text-emerald-600">サブスク中は最大5人の占い師と無料チャット（施術・6人目以降はポイント必要）</div>
