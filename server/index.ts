@@ -288,13 +288,13 @@ wss.on("connection", async (ws, req) => {
             } else {
               const roomData3 = roomData2;
               if (roomData3) {
-                const revenue = await storage.getFortuneteller6MonthRevenue(roomData3.fortunetellerId);
-                const rankInfo = computeRankFromRevenue(revenue);
+                const ftProfile2 = await storage.getFortunetellerProfile(roomData3.fortunetellerId);
+                const storedRank2 = ftProfile2?.rank || "BRONZE";
                 const RANK_MULT2: Record<string, number> = {
                   DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
                   PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,
                 };
-                const mult2 = RANK_MULT2[rankInfo.rank] || 1;
+                const mult2 = RANK_MULT2[storedRank2] || 6;
                 costPt = text.length * mult2;
                 msgCategory = "length_paying";
                 const deducted = await storage.deductPoints(userId, costPt);
@@ -307,13 +307,13 @@ wss.on("connection", async (ws, req) => {
           } else {
             const roomData = await storage.getRoom(roomId);
             if (roomData) {
-              const revenue = await storage.getFortuneteller6MonthRevenue(roomData.fortunetellerId);
-              const rankInfo = computeRankFromRevenue(revenue);
+              const ftProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
+              const storedRank = ftProfile?.rank || "BRONZE";
               const RANK_MULT: Record<string, number> = {
                 DIAMOND_PLUS: 24, DIAMOND: 22, PLATINUM_PLUS: 20,
                 PLATINUM: 18, GOLD: 16, SILVER: 14, BRONZE: 10, NORMAL: 6,
               };
-              const mult = RANK_MULT[rankInfo.rank] || 1;
+              const mult = RANK_MULT[storedRank] || 6;
               costPt = text.length * mult;
               msgCategory = "length_paying";
               const deducted = await storage.deductPoints(userId, costPt);

@@ -1291,17 +1291,15 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const ftMap = new Map(ftProfiles.map((p) => [p.userId, p]));
       const qMap = new Map(qProfiles.map((p) => [p.userId, p]));
 
-      const list = await Promise.all(allUsers.map(async (u) => {
+      const RANK_LABELS: Record<string, string> = {
+        NORMAL: "ノーマル", BRONZE: "ブロンズ", SILVER: "シルバー", GOLD: "ゴールド",
+        PLATINUM: "プラチナ", PLATINUM_PLUS: "プラチナ+", DIAMOND: "ダイヤモンド", DIAMOND_PLUS: "ダイヤモンド+",
+      };
+      const list = allUsers.map((u) => {
         const ft = ftMap.get(u.id);
         const q = qMap.get(u.id);
-        let rank = null;
-        let rankLabel = null;
-        if (ft) {
-          const revenue = await storage.getFortuneteller6MonthRevenue(u.id);
-          const rankInfo = computeRankFromRevenue(revenue);
-          rank = rankInfo.rank;
-          rankLabel = rankInfo.label;
-        }
+        const rank = ft?.rank || null;
+        const rankLabel = rank ? (RANK_LABELS[rank] || rank) : null;
         return {
           id: u.id,
           email: u.email,
@@ -1314,16 +1312,18 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           points: q?.points ?? null,
           is_subscription: q?.isSubscription ?? null,
         };
-      }));
+      });
       res.json(list);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
+  const VALID_RANKS = ["NORMAL", "BRONZE", "SILVER", "GOLD", "PLATINUM", "PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"] as const;
   const adminUserUpdateSchema = z.object({
     email: z.string().email().optional(),
     profile_name: z.string().max(100).optional(),
+    rank: z.enum(VALID_RANKS).optional(),
     points: z.number().int().min(0).optional(),
     is_subscription: z.boolean().optional(),
   });
@@ -1335,13 +1335,14 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (!user) return res.status(404).json({ error: "ユーザーが見つかりません" });
 
       const parsed = adminUserUpdateSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: "入力が不正です" });
-      const { email, profile_name, points, is_subscription } = parsed.data;
+      if (!parsed.success) return res.status(400).json({ error: "入力が不正です", details: parsed.error.issues });
+      const { email, profile_name, rank, points, is_subscription } = parsed.data;
       if (email) await storage.updateUser(id, { email });
 
       if (user.role === "2") {
         const data: any = {};
         if (profile_name) data.name = profile_name;
+        if (rank) data.rank = rank;
         if (Object.keys(data).length > 0) await storage.updateFortunetellerProfile(id, data);
       }
 
