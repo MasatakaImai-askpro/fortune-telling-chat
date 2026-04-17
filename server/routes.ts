@@ -1156,10 +1156,10 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
-      const POINT_TIERS: Record<number, number> = { 600: 400, 1500: 1000, 3000: 2000, 6000: 4000, 15000: 10000, 30000: 20000 };
-      const schema = z.object({ amount_yen: z.number().int().refine((v) => v in POINT_TIERS, { message: "無効な金額です" }) });
+      const VALID_AMOUNTS = new Set([500, 1000, 3000, 5000, 10000, 30000]);
+      const schema = z.object({ amount_yen: z.number().int().refine((v) => VALID_AMOUNTS.has(v), { message: "無効な金額です" }) });
       const { amount_yen } = schema.parse(req.body);
-      const pts = POINT_TIERS[amount_yen];
+      const pts = Math.ceil(amount_yen / 1.5);
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
       const origin = req.headers.origin || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;

@@ -1063,7 +1063,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               <div className="mt-2 text-xs text-emerald-600">サブスク中は最大5人の占い師と無料チャット（施術・6人目以降はポイント必要）</div>
             )}
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {[{ yen: 600, pt: 400 }, { yen: 1500, pt: 1000 }, { yen: 3000, pt: 2000 }, { yen: 6000, pt: 4000 }, { yen: 15000, pt: 10000 }, { yen: 30000, pt: 20000 }].map((opt) => (
+              {[500, 1000, 3000, 5000, 10000, 30000].map((y) => ({ yen: y, pt: Math.ceil(y / YEN_PER_POINT) })).map((opt) => (
                 <button key={opt.yen} onClick={() => handlePointPurchase(opt.yen)} className="rounded-xl px-2 py-2 text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 transition-colors disabled:opacity-50" data-testid={`button-buy-${opt.yen}`}>
                   <div>{opt.yen.toLocaleString()}円</div>
                   <div className="text-[10px] opacity-80">{opt.pt.toLocaleString()}pt</div>
