@@ -711,8 +711,9 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           ftMsgCount = msgs.filter((m) => m.sender === "fortuneteller").length;
           const lastMsg = msgs[msgs.length - 1];
           if (lastMsg) lastMsgAt = lastMsg.createdAt;
-          const unread = await storage.getUnreadCountForRoom(room.id, "fortuneteller");
-          hasUnread = unread > 0;
+          hasUnread = msgs.some(
+            (m) => !m.isLocked && (m.category === "treatment" || m.category === "length_paying")
+          );
         }
 
         const isNew = room && msgCount > 0 && ftMsgCount === 0;
