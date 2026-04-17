@@ -1196,21 +1196,53 @@ export default function Top() {
     const params = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
     if (payment === "success") {
+      const sessionId = params.get("session_id");
       const type = params.get("type");
       const pts = params.get("pts");
       const planParam = params.get("plan");
-      let text = "決済が完了しました";
-      if (type === "points" && pts) text = `${parseInt(pts).toLocaleString()}pt を購入しました！残高に反映されます。`;
-      else if (planParam) text = `${planParam === "premium" ? "プレミアム" : "スタンダード"}プランに加入しました！`;
-      setPaymentBanner({ type: "success", text });
       setActiveTab("account");
       window.history.replaceState({}, "", "/");
-      setTimeout(() => {
+
+      const processPayment = async () => {
+        let text = "決済が完了しました。残高を更新中...";
+        setPaymentBanner({ type: "success", text });
+
+        if (sessionId) {
+          try {
+            const result = await apiRequest("POST", "/api/stripe/verify_session", { session_id: sessionId });
+            const data = await result.json();
+            if (data.status === "ok") {
+              if (data.type === "points") {
+                text = `${Number(data.points).toLocaleString()}pt を購入しました！残高に反映されました。`;
+              } else {
+                const planLabel = planParam === "premium" ? "プレミアム" : "スタンダード";
+                text = `${planLabel}プランに加入しました！`;
+              }
+            } else if (data.status === "already_processed") {
+              text = type === "points" && pts
+                ? `${parseInt(pts).toLocaleString()}pt の購入が確認されました。`
+                : `${planParam === "premium" ? "プレミアム" : "スタンダード"}プランへの加入が確認されました。`;
+            } else {
+              text = "決済の確認に失敗しました。しばらく後に残高をご確認ください。";
+            }
+          } catch {
+            text = type === "points" && pts
+              ? `${parseInt(pts).toLocaleString()}pt を購入しました！残高を確認中...`
+              : `${planParam === "premium" ? "プレミアム" : "スタンダード"}プランに加入しました！`;
+          }
+        } else {
+          if (type === "points" && pts) text = `${parseInt(pts).toLocaleString()}pt を購入しました！`;
+          else if (planParam) text = `${planParam === "premium" ? "プレミアム" : "スタンダード"}プランに加入しました！`;
+        }
+
+        setPaymentBanner({ type: "success", text });
         queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
         queryClient.invalidateQueries({ queryKey: ["/api/my_subscription_slots"] });
         refetchQuerentInfo();
-      }, 1500);
-      setTimeout(() => setPaymentBanner(null), 8000);
+        setTimeout(() => setPaymentBanner(null), 8000);
+      };
+
+      processPayment();
     } else if (payment === "cancel") {
       setPaymentBanner({ type: "cancel", text: "決済がキャンセルされました。" });
       window.history.replaceState({}, "", "/");

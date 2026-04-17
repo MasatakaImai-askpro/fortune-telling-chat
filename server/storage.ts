@@ -99,6 +99,8 @@ export interface IStorage {
   getExpiredUnsettledTreatmentMessages(): Promise<{ id: number; roomId: string; costPt: number; querentId: number }[]>;
   refundTreatmentMessage(id: number, querentId: number, pts: number): Promise<void>;
   addQuerentPoints(userId: number, pts: number): Promise<void>;
+  isStripeSessionProcessed(sessionId: string): Promise<boolean>;
+  markStripeSessionProcessed(sessionId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -559,6 +561,25 @@ export class DatabaseStorage implements IStorage {
     await db.update(querentProfiles)
       .set({ points: sql`${querentProfiles.points} + ${pts}` })
       .where(eq(querentProfiles.userId, userId));
+  }
+
+  async isStripeSessionProcessed(sessionId: string): Promise<boolean> {
+    const result = await db.execute(
+      sql`SELECT 1 FROM stripe_processed_sessions WHERE session_id = ${sessionId} LIMIT 1`
+    );
+    return (result.rows?.length ?? 0) > 0;
+  }
+
+  async markStripeSessionProcessed(sessionId: string): Promise<boolean> {
+    try {
+      await db.execute(
+        sql`INSERT INTO stripe_processed_sessions (session_id) VALUES (${sessionId}) ON CONFLICT DO NOTHING`
+      );
+      const check = await this.isStripeSessionProcessed(sessionId);
+      return check;
+    } catch {
+      return false;
+    }
   }
 }
 

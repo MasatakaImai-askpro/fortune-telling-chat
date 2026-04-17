@@ -1100,13 +1100,69 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           },
           quantity: 1,
         }],
-        metadata: { querent_id: user.id.toString(), plan_type },
-        success_url: `${origin}/?payment=success&plan=${plan_type}`,
+        metadata: { querent_id: user.id.toString(), purchase_type: "subscription", plan_type },
+        success_url: `${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}&plan=${plan_type}`,
         cancel_url: `${origin}/?payment=cancel`,
       });
 
       res.json({ url: session.url });
     } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/stripe/verify_session", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { session_id } = req.body;
+      if (!session_id || typeof session_id !== "string") {
+        return res.status(400).json({ error: "session_idが必要です" });
+      }
+
+      const alreadyProcessed = await storage.isStripeSessionProcessed(session_id);
+      if (alreadyProcessed) {
+        return res.json({ status: "already_processed" });
+      }
+
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+
+      if (session.payment_status !== "paid" && session.status !== "complete") {
+        return res.json({ status: "not_paid" });
+      }
+
+      const querentId = parseInt(session.metadata?.querent_id || "0");
+      const loggedInUserId = req.session.userId!;
+      if (!querentId || querentId !== loggedInUserId) {
+        return res.status(403).json({ error: "セッションの所有者が一致しません" });
+      }
+
+      const marked = await storage.markStripeSessionProcessed(session_id);
+      if (!marked) {
+        return res.json({ status: "already_processed" });
+      }
+
+      const purchaseType = session.metadata?.purchase_type;
+      if (purchaseType === "points") {
+        const points = parseInt(session.metadata?.points || "0");
+        if (points > 0) {
+          await storage.addQuerentPoints(querentId, points);
+          log(`verify_session: added ${points}pt to querent ${querentId}`);
+        }
+        return res.json({ status: "ok", type: "points", points });
+      } else {
+        const planType = session.metadata?.plan_type || "standard";
+        const amount = planType === "premium" ? 50000 : 20000;
+        const now = new Date();
+        const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        await storage.cancelSubscription(querentId).catch(() => {});
+        await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
+        await storage.updateQuerentProfile(querentId, { isSubscription: true });
+        log(`verify_session: subscription (${planType}) activated for querent ${querentId}`);
+        return res.json({ status: "ok", type: "subscription", plan_type: planType });
+      }
+    } catch (e: any) {
+      log(`verify_session error: ${e.message}`);
       res.status(500).json({ error: e.message });
     }
   });
@@ -1146,7 +1202,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           quantity: 1,
         }],
         metadata: { querent_id: user.id.toString(), purchase_type: "points", points: pts.toString() },
-        success_url: `${origin}/?payment=success&type=points&pts=${pts}`,
+        success_url: `${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}&type=points&pts=${pts}`,
         cancel_url: `${origin}/?payment=cancel`,
       });
       res.json({ url: session.url });

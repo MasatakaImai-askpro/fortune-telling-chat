@@ -153,6 +153,11 @@ export const insertMessageSchema = createInsertSchema(messages).omit({ id: true,
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
 export const insertTransferRequestSchema = createInsertSchema(transferRequests).omit({ id: true, requestedAt: true });
 
+export const stripeProcessedSessions = pgTable("stripe_processed_sessions", {
+  sessionId: text("session_id").primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type FortunetellerProfile = typeof fortunetellerProfiles.$inferSelect;
