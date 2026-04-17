@@ -23,6 +23,7 @@ app.post(
   async (req, res) => {
     try {
       const { getUncachableStripeClient } = await import("./stripeClient");
+      const { processStripeSession } = await import("./stripePayments");
       const stripe = await getUncachableStripeClient();
       const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       let event: any;
@@ -33,6 +34,7 @@ app.post(
         try {
           event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
         } catch (sigErr: any) {
+          log(`Webhook signature verification failed: ${sigErr.message}`);
           return res.status(400).json({ error: `Webhook signature failed: ${sigErr.message}` });
         }
       } else {
@@ -44,30 +46,14 @@ app.post(
         }
       }
 
+      log(`Webhook received: ${event.type}`);
+
       if (event.type === "checkout.session.completed") {
         const session = event.data.object as any;
-        const querentId = parseInt(session.metadata?.querent_id);
-        const purchaseType = session.metadata?.purchase_type;
-
-        if (purchaseType === "points") {
-          const points = parseInt(session.metadata?.points || "0");
-          if (querentId && points > 0) {
-            await storage.addQuerentPoints(querentId, points);
-            log(`Webhook: added ${points}pt to querent ${querentId}`);
-          }
-        } else {
-          const planType = session.metadata?.plan_type || "standard";
-          if (querentId) {
-            const amount = planType === "premium" ? 50000 : 20000;
-            const now = new Date();
-            const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-            await storage.cancelSubscription(querentId).catch(() => {});
-            await storage.createSubscription({ querentId, amount, planType, status: "active", startDate: now, endDate } as any);
-            await storage.updateQuerentProfile(querentId, { isSubscription: true });
-            log(`Webhook: subscription (${planType}) activated for querent ${querentId}`);
-          }
-        }
+        const result = await processStripeSession(session);
+        log(`Webhook processStripeSession result: ${JSON.stringify(result)}`);
       }
+
       res.json({ received: true });
     } catch (e: any) {
       log(`Webhook error: ${e.message}`);
