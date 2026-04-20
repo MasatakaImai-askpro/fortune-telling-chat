@@ -10,6 +10,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
+import { runMigrations } from "./migrate";
 
 const UPLOADS_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -613,6 +614,7 @@ async function processExpiredTreatmentRefunds() {
 }
 
 (async () => {
+  await runMigrations();
   await seedDatabase();
   await seedAdminAndSubscriptions();
   await backfillStylesAndMethods();
