@@ -55,8 +55,8 @@ The application is built with Express.js, React, and PostgreSQL, leveraging a si
 
 **Data Models (Drizzle ORM):**
 - `users`: Stores user credentials and roles.
-- `fortuneteller_profiles`: Detailed profiles for fortunetellers, including service offerings and scheduling.
-- `querent_profiles`: Querent personal information and consultation preferences.
+- `fortuneteller_profiles`: Detailed profiles for fortunetellers, including service offerings and scheduling. Fields: `genre` (single select from SAMPLE_GENRES), `style` (text[] multi-select), `divination_methods` (max 3 selections).
+- `querent_profiles`: Querent personal information and consultation preferences. Note: `tel_number` and `postal_code` fields have been removed from both DB and UI.
 - `bank_info`: Fortuneteller bank details for payouts.
 - `rooms`: Manages chat room associations between querents and fortunetellers.
 - `messages`: Stores chat message content, sender, cost, and lock status.

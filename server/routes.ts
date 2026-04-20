@@ -253,6 +253,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           intro: p.intro,
           is_recommended: p.isRecommended,
           style: p.style,
+          genre: p.genre,
           divination_methods: p.divinationMethods,
         };
       }));
@@ -281,6 +282,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         icon_image: profile.iconImage,
         is_recommended: profile.isRecommended,
         style: profile.style,
+        genre: profile.genre,
         divination_methods: profile.divinationMethods,
         regular_holidays: profile.regularHolidays,
         business_hours: profile.businessHours,
@@ -294,7 +296,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   app.patch("/api/my_fortuneteller_profile", requireAuth, async (req: Request, res: Response) => {
     try {
-      const { name, headline, intro, style, divination_methods, profile_image, icon_image, regular_holidays, business_hours, long_intro, free_note } = req.body;
+      const { name, headline, intro, style, genre, divination_methods, profile_image, icon_image, regular_holidays, business_hours, long_intro, free_note } = req.body;
       if (long_intro !== undefined && typeof long_intro === "string" && long_intro.length > 10000) {
         return res.status(400).json({ error: "紹介文は10,000文字以内にしてください" });
       }
@@ -311,7 +313,8 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (name !== undefined) updateData.name = name;
       if (headline !== undefined) updateData.headline = headline;
       if (intro !== undefined) updateData.intro = intro;
-      if (style !== undefined) updateData.style = style;
+      if (style !== undefined) updateData.style = Array.isArray(style) ? style : (style ? [style] : []);
+      if (genre !== undefined) updateData.genre = genre;
       if (divination_methods !== undefined) updateData.divinationMethods = divination_methods;
       if (profile_image !== undefined) updateData.profileImage = profile_image;
       if (icon_image !== undefined) updateData.iconImage = icon_image;
@@ -586,8 +589,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       res.json({
         name: profile.name,
         email: user.email,
-        tel_number: profile.telNumber,
-        postal_code: profile.postalCode,
         address: profile.address,
         birthdate: profile.birthdate,
         zodiac_sign: profile.zodiacSign,
@@ -647,8 +648,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   const infoSchema = z.object({
     name: z.string().max(20).optional(),
-    tel_number: z.string().max(11).optional(),
-    postal_code: z.string().max(7).optional(),
     address: z.string().max(255).optional(),
   });
 
@@ -658,8 +657,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
       const parsed = infoSchema.parse(req.body);
       const updated = await storage.updateQuerentProfile(user.id, {
-        name: parsed.name, telNumber: parsed.tel_number,
-        postalCode: parsed.postal_code, address: parsed.address,
+        name: parsed.name, address: parsed.address,
       });
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });
@@ -760,16 +758,29 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     }
   });
 
+  const bulkSendLastAt = new Map<number, number>();
+
   app.post("/api/send_bulk_message", requireAuth, async (req: Request, res: Response) => {
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
 
+      const last = bulkSendLastAt.get(user.id) ?? 0;
+      const diffMs = Date.now() - last;
+      const COOLTIME_MS = 30 * 60 * 1000;
+      if (diffMs < COOLTIME_MS) {
+        const remainSec = Math.ceil((COOLTIME_MS - diffMs) / 1000);
+        const remainMin = Math.ceil(remainSec / 60);
+        return res.status(429).json({ error: `一括送信のクールタイム中です。あと約${remainMin}分後に再送信できます。` });
+      }
+
       const schema = z.object({
-        querent_ids: z.array(z.number()).min(1, "送信先を1人以上選択してください"),
+        querent_ids: z.array(z.number()).min(1, "送信先を1人以上選択してください").max(100, "一括送信は100人までです"),
         text: z.string().min(1, "メッセージを入力してください").max(150, "メッセージは150文字以内で入力してください"),
       });
       const parsed = schema.parse(req.body);
+
+      bulkSendLastAt.set(user.id, Date.now());
 
       const results = [];
       for (const querentId of parsed.querent_ids) {
@@ -785,6 +796,31 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       res.status(201).json({ message: `${results.length}名にメッセージを送信しました`, results });
     } catch (e: any) {
       if (e instanceof z.ZodError) return res.status(400).json({ error: e.errors[0]?.message || "入力エラー" });
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/querent_karte/:querentId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
+      const querentId = parseInt(req.params.querentId);
+      const profile = await storage.getQuerentProfile(querentId);
+      if (!profile) return res.status(404).json({ error: "見つかりません" });
+      res.json({
+        name: profile.name,
+        birthdate: profile.birthdate,
+        zodiac_sign: profile.zodiacSign,
+        birthplace: profile.birthplace,
+        birthtime: profile.birthtime,
+        worry_category: profile.worryCategory,
+        worry_message: profile.worryMessage,
+        partner_name: profile.partnerName || "",
+        partner_birthdate: profile.partnerBirthdate || "",
+        points: profile.points,
+        is_subscription: profile.isSubscription,
+      });
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
@@ -868,11 +904,12 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           intro: p.intro,
           is_recommended: p.isRecommended,
           style: p.style,
+          genre: p.genre,
           divination_methods: p.divinationMethods,
           regular_holidays: p.regularHolidays,
           business_hours: p.businessHours,
           long_intro: p.longIntro,
-          tags: [p.headline].filter(Boolean),
+          tags: [p.genre, p.headline].filter(Boolean),
         };
       }));
       res.json(list);
@@ -1216,6 +1253,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           cashable: p.cashable,
           is_recommended: p.isRecommended,
           style: p.style,
+          genre: p.genre,
           icon_image: p.iconImage,
         }));
       res.json(sorted);
@@ -1384,6 +1422,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         rank: p.rank,
         is_recommended: p.isRecommended,
         style: p.style,
+        genre: p.genre,
         divination_methods: p.divinationMethods,
         profile_image: p.profileImage,
         icon_image: p.iconImage,

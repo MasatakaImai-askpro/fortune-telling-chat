@@ -38,7 +38,8 @@ type Profile = {
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
-  style: string;
+  style: string[];
+  genre: string;
   divination_methods: string[];
   regular_holidays: string;
   business_hours: string;
@@ -79,6 +80,20 @@ function getBubbleColor(m: Message): string {
   return "bg-gray-100 text-gray-800 rounded-bl-md";
 }
 
+type KarteData = {
+  name: string;
+  birthdate: string;
+  zodiac_sign: string;
+  birthplace: string;
+  birthtime: string;
+  worry_category: string;
+  worry_message: string;
+  partner_name: string;
+  partner_birthdate: string;
+  points: number;
+  is_subscription: boolean;
+};
+
 function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -86,11 +101,15 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const [input, setInput] = useState("");
   const [treatmentTitle, setTreatmentTitle] = useState("");
   const [treatmentPt, setTreatmentPt] = useState<number>(1000);
+  const [selectedMenuType, setSelectedMenuType] = useState<"treatment" | "divination">("treatment");
   const [connected, setConnected] = useState(false);
   const [msgCategory, setMsgCategory] = useState<"free" | "length_paying" | "treatment">("free");
   const [inputError, setInputError] = useState("");
   const [unlockNotification, setUnlockNotification] = useState<number | null>(null);
   const [showAdvisorTemplates, setShowAdvisorTemplates] = useState(false);
+  const [showKarte, setShowKarte] = useState(false);
+  const [karte, setKarte] = useState<KarteData | null>(null);
+  const [karteLoading, setKarteLoading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const { data: advisorTemplates = [] } = useQuery<AdvisorTemplate[]>({ queryKey: ["/api/my_templates"] });
@@ -157,6 +176,20 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
     setTreatmentTitle(value);
   }
 
+  async function fetchKarte() {
+    setKarteLoading(true);
+    try {
+      const res = await apiRequest("GET", `/api/querent_karte/${room.querent_id}`, undefined);
+      const data = await res.json();
+      setKarte(data);
+      setShowKarte(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setKarteLoading(false);
+    }
+  }
+
   function sendMessage() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (msgCategory === "treatment") {
@@ -170,8 +203,15 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         cost_pt: treatmentPt,
       };
       wsRef.current.send(JSON.stringify(payload));
+      const sysText = selectedMenuType === "divination" ? "鑑定メニューを送信しました" : "施術メニューを送信しました";
+      setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "chat_message", sender: "fortuneteller", text: sysText, category: "free" }));
+        }
+      }, 300);
       setTreatmentTitle("");
       setTreatmentPt(1000);
+      setSelectedMenuType("treatment");
       return;
     }
     if (!input.trim()) return;
@@ -197,12 +237,32 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
           🔓 相談者がメッセージをアンロックしました (+{unlockNotification}pt)
         </div>
       )}
+      {showKarte && karte && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowKarte(false)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl border border-pink-200 p-5 space-y-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h4 className="text-base font-bold text-pink-700">相談者カルテ：{karte.name}</h4>
+            <div className="text-xs text-gray-700 space-y-1.5">
+              {karte.birthdate && <div><span className="font-semibold text-gray-500">生年月日:</span> {karte.birthdate}</div>}
+              {karte.zodiac_sign && <div><span className="font-semibold text-gray-500">星座:</span> {karte.zodiac_sign}</div>}
+              {karte.birthplace && <div><span className="font-semibold text-gray-500">出生地:</span> {karte.birthplace}</div>}
+              {karte.birthtime && <div><span className="font-semibold text-gray-500">出生時刻:</span> {karte.birthtime}</div>}
+              {karte.worry_category && <div><span className="font-semibold text-gray-500">お悩みカテゴリ:</span> {karte.worry_category}</div>}
+              {karte.worry_message && <div><span className="font-semibold text-gray-500">お悩み:</span> {karte.worry_message}</div>}
+              {karte.partner_name && <div><span className="font-semibold text-gray-500">お相手名:</span> {karte.partner_name}</div>}
+              {karte.partner_birthdate && <div><span className="font-semibold text-gray-500">お相手生年月日:</span> {karte.partner_birthdate}</div>}
+              <div><span className="font-semibold text-gray-500">保有ポイント:</span> {karte.points.toLocaleString()}pt</div>
+              <div><span className="font-semibold text-gray-500">月額サブスク:</span> {karte.is_subscription ? "あり" : "なし"}</div>
+            </div>
+            <button className="w-full rounded-xl py-2 text-sm bg-pink-50 border border-pink-200 text-gray-700 hover:bg-pink-100 transition-colors" onClick={() => setShowKarte(false)}>閉じる</button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-pink-200">
         <button onClick={onBack} className="text-gray-500 hover:text-gray-800" data-testid="button-back-rooms">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold truncate text-gray-900" data-testid="text-chat-querent">{room.querent_name}</div>
+          <button onClick={fetchKarte} disabled={karteLoading} className="text-sm font-semibold truncate text-gray-900 hover:text-pink-600 transition-colors text-left w-full" data-testid="button-open-karte">{room.querent_name}</button>
           <div className="text-[10px] text-gray-400">{connected ? "接続中" : "接続中..."}</div>
         </div>
       </div>
@@ -266,7 +326,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
                         <div className="text-[9px] text-gray-400 mb-0.5">{menuType === "treatment" ? "施術" : "鑑定"}</div>
                         <div className="flex flex-wrap gap-1">
                           {typeMenus.map((m) => (
-                            <button key={m.id} onClick={() => { setTreatmentTitle(m.name); setTreatmentPt(m.required_pt); }}
+                            <button key={m.id} onClick={() => { setTreatmentTitle(m.name); setTreatmentPt(m.required_pt); setSelectedMenuType(m.menu_type); }}
                               className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${treatmentPt === m.required_pt && treatmentTitle === m.name ? "bg-amber-500 border-amber-400 text-white" : "bg-pink-50 border-pink-200 text-gray-700 hover:bg-amber-50"}`}>
                               {m.name} ({m.required_pt.toLocaleString()}pt)
                             </button>
@@ -383,6 +443,7 @@ function RoomList({ rooms, onSelect }: { rooms: Room[]; onSelect: (r: Room) => v
 
 const STYLE_OPTIONS = ["優しく回答", "じっくり聞きます", "即対応いたします", "ハッキリ回答", "リードします", "寄り添います", "明るく、元気に"];
 const METHOD_OPTIONS = ["タロット・オラクルカード", "四柱推命", "霊視・霊聴・オーラ", "手相", "占星術", "九星気学", "チャネリング", "ツインレイ鑑定", "カウンセリング", "その他"];
+const GENRE_OPTIONS = ["恋愛", "結婚", "復縁", "禁断の恋", "家族", "仕事", "財運", "カウンセリング"];
 
 function ProfileSettings() {
   const { user } = useAuth();
@@ -393,7 +454,8 @@ function ProfileSettings() {
   const [name, setName] = useState("");
   const [headline, setHeadline] = useState("");
   const [intro, setIntro] = useState("");
-  const [style, setStyle] = useState("");
+  const [style, setStyle] = useState<string[]>([]);
+  const [genre, setGenre] = useState("");
   const [divinationMethods, setDivinationMethods] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState("");
   const [iconImage, setIconImage] = useState("");
@@ -415,7 +477,8 @@ function ProfileSettings() {
       setName(profile.name);
       setHeadline(profile.headline);
       setIntro(profile.intro);
-      setStyle(profile.style || "");
+      setStyle(Array.isArray(profile.style) ? profile.style : (profile.style ? [profile.style] : []));
+      setGenre(profile.genre || "");
       setDivinationMethods(profile.divination_methods || []);
       setProfileImage(profile.profile_image || "");
       setIconImage(profile.icon_image || "");
@@ -426,10 +489,16 @@ function ProfileSettings() {
     }
   }, [profile]);
 
+  function toggleStyle(s: string) {
+    setStyle((prev) => prev.includes(s) ? prev.filter((v) => v !== s) : [...prev, s]);
+  }
+
   function toggleMethod(m: string) {
-    setDivinationMethods((prev) =>
-      prev.includes(m) ? prev.filter((v) => v !== m) : [...prev, m]
-    );
+    setDivinationMethods((prev) => {
+      if (prev.includes(m)) return prev.filter((v) => v !== m);
+      if (prev.length >= 3) return prev;
+      return [...prev, m];
+    });
   }
 
   async function uploadImage(file: File, type: "icon" | "banner") {
@@ -490,7 +559,7 @@ function ProfileSettings() {
     try {
       setSaving(true);
       await apiRequest("PATCH", "/api/my_fortuneteller_profile", {
-        name, headline, intro, style, divination_methods: divinationMethods,
+        name, headline, intro, style, genre, divination_methods: divinationMethods,
         profile_image: profileImage, icon_image: iconImage,
         regular_holidays: regularHolidays, business_hours: businessHours, long_intro: longIntro,
         free_note: freeNote,
@@ -564,17 +633,25 @@ function ProfileSettings() {
         <input value={regularHolidays} onChange={(e) => setRegularHolidays(e.target.value)} maxLength={100} placeholder="例: 毎週水曜日" data-testid="input-profile-holidays"
           className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
       </label>
+      <label className="block text-sm">
+        <span className="text-gray-600">得意ジャンル</span>
+        <select value={genre} onChange={(e) => setGenre(e.target.value)} data-testid="select-profile-genre"
+          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+          <option value="">選択してください</option>
+          {GENRE_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </label>
       <div className="space-y-1.5">
-        <span className="text-gray-600 text-xs">スタイル</span>
+        <span className="text-gray-600 text-xs">スタイル（複数選択可）</span>
         <div className="flex flex-wrap gap-2">
           {STYLE_OPTIONS.map((s) => (
             <button
               key={s}
               type="button"
-              onClick={() => setStyle(s)}
+              onClick={() => toggleStyle(s)}
               data-testid={`button-style-${s}`}
               className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
-                style === s
+                style.includes(s)
                   ? "bg-purple-100 border-purple-300 text-purple-700"
                   : "bg-pink-50 border-pink-200 text-gray-600 hover:text-gray-800"
               }`}
@@ -585,7 +662,7 @@ function ProfileSettings() {
         </div>
       </div>
       <div className="space-y-1.5">
-        <span className="text-gray-600 text-xs">占術（複数選択可）</span>
+        <span className="text-gray-600 text-xs">占術（最大3つまで選択可）</span>
         <div className="flex flex-wrap gap-2">
           {METHOD_OPTIONS.map((m) => (
             <button
@@ -593,9 +670,12 @@ function ProfileSettings() {
               type="button"
               onClick={() => toggleMethod(m)}
               data-testid={`button-method-${m}`}
+              disabled={!divinationMethods.includes(m) && divinationMethods.length >= 3}
               className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
                 divinationMethods.includes(m)
                   ? "bg-cyan-100 border-cyan-300 text-cyan-700"
+                  : divinationMethods.length >= 3
+                  ? "bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed"
                   : "bg-pink-50 border-pink-200 text-gray-600 hover:text-gray-800"
               }`}
             >
@@ -603,6 +683,7 @@ function ProfileSettings() {
             </button>
           ))}
         </div>
+        {divinationMethods.length >= 3 && <p className="text-[10px] text-amber-600">最大3つまで選択できます</p>}
       </div>
       <button onClick={save} disabled={saving} data-testid="button-save-profile"
         className="w-full py-2 rounded-xl bg-pink-600 text-white font-semibold hover:bg-pink-700 transition-colors text-sm disabled:opacity-50">

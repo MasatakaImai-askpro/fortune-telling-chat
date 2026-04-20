@@ -69,7 +69,8 @@ type Advisor = {
   profile_image: string;
   icon_image: string;
   is_recommended: boolean;
-  style: string;
+  style: string[];
+  genre: string;
   divination_methods: string[];
   regular_holidays: string;
   business_hours: string;
@@ -101,8 +102,6 @@ type ThreadsMap = Record<number, Thread>;
 type QuerentInfo = {
   name: string;
   email: string;
-  tel_number: string;
-  postal_code: string;
   address: string;
   birthdate: string;
   zodiac_sign: string;
@@ -286,7 +285,9 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
               </div>
               <p className="text-xs text-pink-700 leading-relaxed">{a.headline}</p>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {a.style && <span className="text-[10px] bg-purple-100 text-purple-700 border border-purple-300 px-1.5 py-0.5 rounded-full" data-testid={`badge-style-${a.id}`}>{a.style}</span>}
+                {(a.style || []).slice(0, 2).map((s) => (
+                  <span key={s} className="text-[10px] bg-purple-100 text-purple-700 border border-purple-300 px-1.5 py-0.5 rounded-full" data-testid={`badge-style-${a.id}`}>{s}</span>
+                ))}
                 {(a.divination_methods || []).map((m) => (
                   <span key={m} className="text-[10px] bg-cyan-100 text-cyan-700 border border-cyan-300 px-1.5 py-0.5 rounded-full" data-testid={`badge-method-${a.id}-${m}`}>{m}</span>
                 ))}
@@ -323,9 +324,9 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
               </div>
               <h4 className="mt-3 font-semibold text-pink-700">{adv(detailId)!.headline}</h4>
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                {adv(detailId)!.style && (
-                  <span className="text-[11px] bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full" data-testid="badge-detail-style">{adv(detailId)!.style}</span>
-                )}
+                {(adv(detailId)!.style || []).map((s) => (
+                  <span key={s} className="text-[11px] bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full" data-testid="badge-detail-style">{s}</span>
+                ))}
                 {(adv(detailId)!.divination_methods || []).map((m) => (
                   <span key={m} className="text-[11px] bg-cyan-100 text-cyan-700 border border-cyan-300 px-2 py-0.5 rounded-full" data-testid={`badge-detail-method-${m}`}>{m}</span>
                 ))}
@@ -364,17 +365,57 @@ function CardList({ advisors, onStartChat, onFav, favorites, emptyText = "" }: {
   );
 }
 
+const DIVINATION_OPTIONS_TOP = ["タロット・オラクルカード", "四柱推命", "霊視・霊聴・オーラ", "手相", "占星術", "九星気学", "チャネリング", "ツインレイ鑑定", "カウンセリング", "その他"];
+const RANK_ORDER_TOP = ["DIAMOND_PLUS", "DIAMOND", "PLATINUM_PLUS", "PLATINUM", "GOLD", "SILVER", "BRONZE", "NORMAL"];
+const RANK_LABELS_TOP: Record<string, string> = {
+  DIAMOND_PLUS: "ダイヤモンド+", DIAMOND: "ダイヤモンド", PLATINUM_PLUS: "プラチナ+", PLATINUM: "プラチナ",
+  GOLD: "ゴールド", SILVER: "シルバー", BRONZE: "ブロンズ", NORMAL: "ノーマル",
+};
+
 function Advisors({ advisorsFromTop, favorites, onFav, onStartChat }: { advisorsFromTop: Advisor[]; favorites: number[]; onFav: (id: number) => void; onStartChat: (id: number) => void }) {
   const [q, setQ] = useState("");
-  const lowerQ = q.toLowerCase();
-  const filtered = advisorsFromTop.filter((a) => a.name.toLowerCase().includes(lowerQ) || (a.tags || []).join(" ").toLowerCase().includes(lowerQ) || a.headline.toLowerCase().includes(lowerQ));
+  const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  const [divFilter, setDivFilter] = useState<string>("");
+  const [rankFilter, setRankFilter] = useState<string>("");
+
+  const filtered = advisorsFromTop.filter((a) => {
+    const lowerQ = q.toLowerCase();
+    const matchName = !q || a.name.toLowerCase().includes(lowerQ) || (a.tags || []).join(" ").toLowerCase().includes(lowerQ) || a.headline.toLowerCase().includes(lowerQ);
+    const matchGenre = !genreFilter || a.genre === genreFilter;
+    const matchDiv = !divFilter || (a.divination_methods || []).includes(divFilter);
+    const matchRank = !rankFilter || a.rank === rankFilter;
+    return matchName && matchGenre && matchDiv && matchRank;
+  });
+
   return (
     <section className="space-y-3">
-      <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-white/90 backdrop-blur">
+      <div className="sticky top-0 z-10 -mx-4 px-4 pb-3 pt-1 bg-white/90 backdrop-blur space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前・ジャンルで検索" data-testid="input-search-advisors"
             className="w-full rounded-2xl bg-pink-50 border border-pink-200 pl-9 pr-3 py-3 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          <button onClick={() => setGenreFilter(null)}
+            className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${!genreFilter ? "bg-pink-600 text-white border-pink-600" : "bg-white border-pink-200 text-gray-600 hover:bg-pink-50"}`}
+            data-testid="chip-genre-all">すべて</button>
+          {SAMPLE_GENRES.map((g) => (
+            <button key={g} onClick={() => setGenreFilter(genreFilter === g ? null : g)}
+              className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${genreFilter === g ? "bg-pink-600 text-white border-pink-600" : "bg-white border-pink-200 text-gray-600 hover:bg-pink-50"}`}
+              data-testid={`chip-genre-${g}`}>{g}</button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <select value={divFilter} onChange={(e) => setDivFilter(e.target.value)} data-testid="select-filter-divination"
+            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+            <option value="">占術（すべて）</option>
+            {DIVINATION_OPTIONS_TOP.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select value={rankFilter} onChange={(e) => setRankFilter(e.target.value)} data-testid="select-filter-rank"
+            className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-2 py-1.5 text-xs text-gray-700 focus:ring-2 focus:ring-pink-400 focus:outline-none">
+            <option value="">ランク（すべて）</option>
+            {RANK_ORDER_TOP.map((r) => <option key={r} value={r}>{RANK_LABELS_TOP[r]}</option>)}
+          </select>
         </div>
       </div>
       <CardList advisors={filtered} onStartChat={onStartChat} onFav={onFav} favorites={favorites} emptyText="該当する占い師が見つかりませんでした" />
@@ -707,23 +748,13 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             <div className="font-semibold leading-tight truncate text-gray-900" data-testid="text-chat-advisor-name">{advisor.name}</div>
             <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
               <Ribbon rank={advisor.rank} />
-              {plan === "subscription" && subscriptionActive ? (
+              {plan === "subscription" && subscriptionActive && (
                 <span className="text-emerald-600">月額内で使い放題</span>
-              ) : (
-                <span>1文字={getRankInfo(advisor.rank).mult}pt / 1pt={YEN_PER_POINT}円</span>
               )}
             </div>
           </div>
           <button className="ml-auto text-xs font-semibold rounded-xl px-3 py-1 bg-pink-50 border border-pink-200 text-gray-700" onClick={onBack} data-testid="button-back-to-list">一覧へ</button>
         </div>
-        {querentInfo?.worry_category && (
-          <div className="mt-1 mb-1 px-1">
-            <p className="text-[11px] text-gray-500 truncate">
-              <span className="font-semibold text-pink-600">{querentInfo.worry_category}</span>
-              {querentInfo.worry_message ? `：${truncate(querentInfo.worry_message, 40)}` : ""}
-            </p>
-          </div>
-        )}
       </div>
       <div ref={scrollRef} className="mt-3 space-y-3 max-h-[50vh] overflow-y-auto">
         {messages.length === 0 ? (
@@ -902,7 +933,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     try {
       setSubmitting(true); setSubmitMsg(null);
       await apiRequest("POST", "/api/edit_querent_info", {
-        name: queInfo.name, tel_number: queInfo.tel_number, postal_code: queInfo.postal_code, address: queInfo.address,
+        name: queInfo.name, address: queInfo.address,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
       setSubmitMsg("更新しました");
@@ -1053,7 +1084,6 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
 
           <div className="border rounded-2xl p-4 bg-white border-pink-200">
             <div className="font-semibold text-gray-900">ポイント制</div>
-            <div className="text-sm text-gray-600">1pt={YEN_PER_POINT}円。文字数×ランク倍率で消費。</div>
             <div className="mt-2 flex items-center gap-3 flex-wrap">
               <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b></span>
             </div>
@@ -1077,11 +1107,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
           <h2 className="text-lg font-semibold text-gray-900">登録情報</h2>
           <Input label="名前" value={queInfo.name} onChange={(v) => setQueInfo({ ...queInfo, name: v })} />
           <Input label="メールアドレス" value={queInfo.email} onChange={(v) => setQueInfo({ ...queInfo, email: v })} type="email" />
-          <Input label="電話番号" value={queInfo.tel_number} onChange={(v) => setQueInfo({ ...queInfo, tel_number: v })} />
-          <div className="grid grid-cols-3 gap-2">
-            <Input label="郵便番号" value={queInfo.postal_code} onChange={(v) => setQueInfo({ ...queInfo, postal_code: v })} />
-            <div className="col-span-2"><Input label="住所" value={queInfo.address} onChange={(v) => setQueInfo({ ...queInfo, address: v })} /></div>
-          </div>
+          <Input label="住所" value={queInfo.address} onChange={(v) => setQueInfo({ ...queInfo, address: v })} />
           <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
             <div className="text-xs text-gray-600">
               {submitMsg && <span className="text-green-600">{submitMsg}</span>}
