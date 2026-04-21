@@ -49,47 +49,58 @@ app.post(
 
       log(`Webhook received: ${event.type}`);
 
-      if (event.type === "checkout.session.completed") {
-        // 初回決済完了：checkout.session を展開してサブスクリプション情報を取得
-        const sessionObj = event.data.object as any;
-        let expandedSession = sessionObj;
-        if (sessionObj.mode === "subscription" && typeof sessionObj.subscription === "string") {
-          try {
-            const { getUncachableStripeClient: getStripe2 } = await import("./stripeClient");
-            const stripe2 = await getStripe2();
-            expandedSession = await stripe2.checkout.sessions.retrieve(sessionObj.id, {
-              expand: ["subscription"],
-            });
-          } catch (expandErr: any) {
-            log(`Webhook: failed to expand session subscription: ${expandErr.message}`);
-          }
-        }
-        const result = await processStripeSession(expandedSession as any);
-        log(`Webhook processStripeSession result: ${JSON.stringify(result)}`);
+      switch (event.type) {
 
-      } else if (event.type === "invoice.payment_succeeded") {
-        // 翌月以降の自動課金成功：サブスクリプション期間を延長
-        const invoice = event.data.object as any;
-        const stripeSubId: string = typeof invoice.subscription === "string"
-          ? invoice.subscription
-          : invoice.subscription?.id || "";
-        if (stripeSubId && invoice.billing_reason !== "subscription_create") {
-          const periodEnd = invoice.lines?.data?.[0]?.period?.end;
-          if (periodEnd) {
+        case "checkout.session.completed": {
+          // 初回決済完了：subscription を展開して current_period_end を取得
+          const sessionObj = event.data.object as any;
+          let expandedSession = sessionObj;
+          if (sessionObj.mode === "subscription" && typeof sessionObj.subscription === "string") {
+            try {
+              expandedSession = await stripe.checkout.sessions.retrieve(sessionObj.id, {
+                expand: ["subscription"],
+              });
+            } catch (expandErr: any) {
+              log(`Webhook: failed to expand session: ${expandErr.message}`);
+            }
+          }
+          const result = await processStripeSession(expandedSession as any);
+          log(`Webhook checkout.session.completed: ${JSON.stringify(result)}`);
+          break;
+        }
+
+        case "invoice.payment_succeeded": {
+          // 翌月以降の自動課金成功 → サブスクリプション期間を延長
+          // billing_reason が "subscription_create" の場合は初回請求なのでスキップ
+          const invoice = event.data.object as any;
+          if (invoice.billing_reason === "subscription_create") break;
+
+          const stripeSubId: string = typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id || "";
+          const periodEnd: number | undefined = invoice.lines?.data?.[0]?.period?.end;
+
+          if (stripeSubId && periodEnd) {
             const newEndDate = new Date(periodEnd * 1000);
             await storage.renewSubscription(stripeSubId, newEndDate);
-            log(`Webhook: renewed subscription ${stripeSubId} → ${newEndDate.toISOString()}`);
+            log(`Webhook invoice.payment_succeeded: renewed ${stripeSubId} → ${newEndDate.toISOString()}`);
           }
+          break;
         }
 
-      } else if (event.type === "customer.subscription.deleted") {
-        // 解約・支払い失敗による解除
-        const stripeSub = event.data.object as any;
-        const stripeSubId: string = stripeSub.id || "";
-        if (stripeSubId) {
-          await storage.cancelSubscriptionByStripeId(stripeSubId);
-          log(`Webhook: cancelled subscription ${stripeSubId}`);
+        case "customer.subscription.deleted": {
+          // 解約または支払い失敗による強制停止
+          const deletedSub = event.data.object as any;
+          const stripeSubId: string = deletedSub.id || "";
+          if (stripeSubId) {
+            await storage.cancelSubscriptionByStripeId(stripeSubId);
+            log(`Webhook customer.subscription.deleted: cancelled ${stripeSubId}`);
+          }
+          break;
         }
+
+        default:
+          log(`Webhook: unhandled event type ${event.type}`);
       }
 
       res.json({ received: true });
