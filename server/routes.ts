@@ -1126,8 +1126,13 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const schema = z.object({ plan_type: z.enum(["standard", "premium"]) });
       const { plan_type } = schema.parse(req.body);
 
-      const amount = plan_type === "premium" ? 50000 : 20000;
-      const planName = plan_type === "premium" ? "プレミアムコース (50,000円/30日)" : "スタンダードコース (20,000円/30日)";
+      const priceId = plan_type === "premium"
+        ? process.env.STRIPE_PRICE_ID_50K
+        : process.env.STRIPE_PRICE_ID_20K;
+
+      if (!priceId) {
+        return res.status(500).json({ error: "Stripe Price IDが設定されていません" });
+      }
 
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
@@ -1135,15 +1140,8 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const origin = req.headers.origin || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
 
       const session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        line_items: [{
-          price_data: {
-            currency: "jpy",
-            unit_amount: amount,
-            product_data: { name: planName },
-          },
-          quantity: 1,
-        }],
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
         metadata: { querent_id: user.id.toString(), purchase_type: "subscription", plan_type },
         success_url: `${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}&plan=${plan_type}`,
         cancel_url: `${origin}/?payment=cancel`,
@@ -1165,7 +1163,11 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const { getUncachableStripeClient } = await import("./stripeClient");
       const { processStripeSession } = await import("./stripePayments");
       const stripe = await getUncachableStripeClient();
-      const stripeSession = await stripe.checkout.sessions.retrieve(session_id);
+
+      // サブスクリプションモードの場合に current_period_end を取得するため expand
+      const stripeSession = await stripe.checkout.sessions.retrieve(session_id, {
+        expand: ["subscription"],
+      });
 
       const querentId = parseInt(stripeSession.metadata?.querent_id || "0");
       const loggedInUserId = req.session.userId!;

@@ -50,9 +50,46 @@ app.post(
       log(`Webhook received: ${event.type}`);
 
       if (event.type === "checkout.session.completed") {
-        const session = event.data.object as any;
-        const result = await processStripeSession(session);
+        // 初回決済完了：checkout.session を展開してサブスクリプション情報を取得
+        const sessionObj = event.data.object as any;
+        let expandedSession = sessionObj;
+        if (sessionObj.mode === "subscription" && typeof sessionObj.subscription === "string") {
+          try {
+            const { getUncachableStripeClient: getStripe2 } = await import("./stripeClient");
+            const stripe2 = await getStripe2();
+            expandedSession = await stripe2.checkout.sessions.retrieve(sessionObj.id, {
+              expand: ["subscription"],
+            });
+          } catch (expandErr: any) {
+            log(`Webhook: failed to expand session subscription: ${expandErr.message}`);
+          }
+        }
+        const result = await processStripeSession(expandedSession as any);
         log(`Webhook processStripeSession result: ${JSON.stringify(result)}`);
+
+      } else if (event.type === "invoice.payment_succeeded") {
+        // 翌月以降の自動課金成功：サブスクリプション期間を延長
+        const invoice = event.data.object as any;
+        const stripeSubId: string = typeof invoice.subscription === "string"
+          ? invoice.subscription
+          : invoice.subscription?.id || "";
+        if (stripeSubId && invoice.billing_reason !== "subscription_create") {
+          const periodEnd = invoice.lines?.data?.[0]?.period?.end;
+          if (periodEnd) {
+            const newEndDate = new Date(periodEnd * 1000);
+            await storage.renewSubscription(stripeSubId, newEndDate);
+            log(`Webhook: renewed subscription ${stripeSubId} → ${newEndDate.toISOString()}`);
+          }
+        }
+
+      } else if (event.type === "customer.subscription.deleted") {
+        // 解約・支払い失敗による解除
+        const stripeSub = event.data.object as any;
+        const stripeSubId: string = stripeSub.id || "";
+        if (stripeSubId) {
+          await storage.cancelSubscriptionByStripeId(stripeSubId);
+          log(`Webhook: cancelled subscription ${stripeSubId}`);
+        }
       }
 
       res.json({ received: true });

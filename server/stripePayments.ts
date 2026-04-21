@@ -15,9 +15,11 @@ export type ProcessResult =
  */
 export async function processStripeSession(session: {
   id: string;
+  mode?: string | null;
   payment_status: string;
   status: string | null;
   metadata: Record<string, string> | null;
+  subscription?: string | { id: string; current_period_end: number } | null;
 }): Promise<ProcessResult> {
   if (session.payment_status !== "paid" && session.status !== "complete") {
     return { status: "not_paid" };
@@ -53,7 +55,25 @@ export async function processStripeSession(session: {
     const planType = session.metadata?.plan_type || "standard";
     const amount = planType === "premium" ? 50000 : 20000;
     const now = new Date();
-    const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // サブスクリプションモードの場合はStripeから期間終了日を取得
+    let endDate: Date;
+    let stripeSubscriptionId = "";
+
+    if (session.mode === "subscription" && session.subscription) {
+      if (typeof session.subscription === "string") {
+        // subscription IDのみの場合：Stripeから取得が必要 → フォールバックで1ヶ月
+        stripeSubscriptionId = session.subscription;
+        endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      } else {
+        // 展開済みオブジェクトの場合
+        stripeSubscriptionId = session.subscription.id;
+        endDate = new Date(session.subscription.current_period_end * 1000);
+      }
+    } else {
+      endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    }
+
     await storage.cancelSubscription(querentId).catch(() => {});
     await storage.createSubscription({
       querentId,
@@ -62,9 +82,10 @@ export async function processStripeSession(session: {
       status: "active",
       startDate: now,
       endDate,
+      stripeSubscriptionId,
     } as any);
     await storage.updateQuerentProfile(querentId, { isSubscription: true });
-    log(`processStripeSession: subscription (${planType}) activated for querent ${querentId} (session ${session.id})`);
+    log(`processStripeSession: subscription (${planType}) activated for querent ${querentId}, stripeSubId=${stripeSubscriptionId}, endDate=${endDate.toISOString()} (session ${session.id})`);
     return { status: "ok", type: "subscription", plan_type: planType };
   }
 }

@@ -52,6 +52,9 @@ export interface IStorage {
   getAllSubscriptions(): Promise<Subscription[]>;
   createSubscription(sub: InsertSubscription): Promise<Subscription>;
   cancelSubscription(querentId: number): Promise<void>;
+  getSubscriptionByStripeId(stripeSubId: string): Promise<Subscription | undefined>;
+  renewSubscription(stripeSubId: string, newEndDate: Date): Promise<void>;
+  cancelSubscriptionByStripeId(stripeSubId: string): Promise<void>;
 
   getAllTransferRequests(): Promise<TransferRequest[]>;
   getTransferRequestsByFortuneTeller(fortunetellerId: number): Promise<TransferRequest[]>;
@@ -246,6 +249,36 @@ export class DatabaseStorage implements IStorage {
     await db.update(querentProfiles)
       .set({ isSubscription: false })
       .where(eq(querentProfiles.userId, querentId));
+  }
+
+  async getSubscriptionByStripeId(stripeSubId: string): Promise<Subscription | undefined> {
+    const rows = await db.select().from(subscriptions)
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    return rows[0];
+  }
+
+  async renewSubscription(stripeSubId: string, newEndDate: Date): Promise<void> {
+    const sub = await this.getSubscriptionByStripeId(stripeSubId);
+    if (!sub) return;
+    await db.update(subscriptions)
+      .set({ endDate: newEndDate, status: "active" })
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubId));
+    await db.update(querentProfiles)
+      .set({ isSubscription: true })
+      .where(eq(querentProfiles.userId, sub.querentId));
+  }
+
+  async cancelSubscriptionByStripeId(stripeSubId: string): Promise<void> {
+    const sub = await this.getSubscriptionByStripeId(stripeSubId);
+    if (!sub) return;
+    await db.update(subscriptions)
+      .set({ status: "cancelled" })
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubId));
+    await db.update(querentProfiles)
+      .set({ isSubscription: false })
+      .where(eq(querentProfiles.userId, sub.querentId));
   }
 
   async getAllSubscriptions(): Promise<Subscription[]> {

@@ -67,6 +67,18 @@ export async function runMigrations() {
       await client.query(`ALTER TABLE querent_profiles DROP COLUMN postal_code`);
     }
 
+    // ── subscriptions.stripe_subscription_id: add if missing ─────────────────
+    const stripeSubIdRes = await client.query<{ count: string }>(`
+      SELECT COUNT(*) AS count FROM information_schema.columns
+      WHERE table_name = 'subscriptions' AND column_name = 'stripe_subscription_id'
+    `);
+    if (parseInt(stripeSubIdRes.rows[0].count) === 0) {
+      console.log("[migrate] Adding subscriptions.stripe_subscription_id column");
+      await client.query(`
+        ALTER TABLE subscriptions ADD COLUMN stripe_subscription_id text NOT NULL DEFAULT ''
+      `);
+    }
+
     await client.query("COMMIT");
     console.log("[migrate] All migrations complete");
   } catch (err) {

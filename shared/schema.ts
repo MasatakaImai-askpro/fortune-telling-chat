@@ -94,6 +94,7 @@ export const subscriptions = pgTable("subscriptions", {
   status: varchar("status", { length: 20 }).notNull().default("active"),
   startDate: timestamp("start_date").defaultNow().notNull(),
   endDate: timestamp("end_date").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id").notNull().default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
