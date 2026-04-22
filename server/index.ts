@@ -35,7 +35,7 @@ app.post(
         try {
           event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
         } catch (sigErr: any) {
-          log(`Webhook signature verification failed: ${sigErr.message}`);
+          console.log(`[Webhook] Signature verification failed: ${sigErr.message}`);
           return res.status(400).json({ error: `Webhook signature failed: ${sigErr.message}` });
         }
       } else {
@@ -47,7 +47,7 @@ app.post(
         }
       }
 
-      log(`Webhook received: ${event.type}`);
+      console.log(`[Webhook] received: ${event.type}`);
 
       switch (event.type) {
 
@@ -61,11 +61,11 @@ app.post(
                 expand: ["subscription"],
               });
             } catch (expandErr: any) {
-              log(`Webhook: failed to expand session: ${expandErr.message}`);
+              console.log(`[Webhook] Failed to expand session: ${expandErr.message}`);
             }
           }
           const result = await processStripeSession(expandedSession as any);
-          log(`Webhook checkout.session.completed: ${JSON.stringify(result)}`);
+          console.log(`[Webhook] checkout.session.completed: ${JSON.stringify(result)}`);
           break;
         }
 
@@ -77,13 +77,26 @@ app.post(
 
           const stripeSubId: string = typeof invoice.subscription === "string"
             ? invoice.subscription
-            : invoice.subscription?.id || "";
-          const periodEnd: number | undefined = invoice.lines?.data?.[0]?.period?.end;
+            : (invoice.subscription?.id ?? "");
 
-          if (stripeSubId && periodEnd) {
-            const newEndDate = new Date(periodEnd * 1000);
-            await storage.renewSubscription(stripeSubId, newEndDate);
-            log(`Webhook invoice.payment_succeeded: renewed ${stripeSubId} → ${newEndDate.toISOString()}`);
+          // period_end を安全に取得（invoice直下 → lines内の順で試みる）
+          const rawPeriodEnd: unknown =
+            invoice.period_end ??
+            invoice.lines?.data?.[0]?.period?.end;
+          const periodEndSec = typeof rawPeriodEnd === "number" && rawPeriodEnd > 0
+            ? rawPeriodEnd
+            : null;
+
+          if (stripeSubId && periodEndSec) {
+            const newEndDate = new Date(periodEndSec * 1000);
+            if (!isNaN(newEndDate.getTime())) {
+              await storage.renewSubscription(stripeSubId, newEndDate);
+              console.log(`[Webhook] invoice.payment_succeeded: renewed ${stripeSubId} → ${newEndDate.toISOString()}`);
+            } else {
+              console.log(`[Webhook] invoice.payment_succeeded: invalid periodEnd value: ${rawPeriodEnd}`);
+            }
+          } else {
+            console.log(`[Webhook] invoice.payment_succeeded: skipped (subId="${stripeSubId}" periodEnd=${rawPeriodEnd})`);
           }
           break;
         }
@@ -91,21 +104,21 @@ app.post(
         case "customer.subscription.deleted": {
           // 解約または支払い失敗による強制停止
           const deletedSub = event.data.object as any;
-          const stripeSubId: string = deletedSub.id || "";
+          const stripeSubId: string = deletedSub.id ?? "";
           if (stripeSubId) {
             await storage.cancelSubscriptionByStripeId(stripeSubId);
-            log(`Webhook customer.subscription.deleted: cancelled ${stripeSubId}`);
+            console.log(`[Webhook] customer.subscription.deleted: cancelled ${stripeSubId}`);
           }
           break;
         }
 
         default:
-          log(`Webhook: unhandled event type ${event.type}`);
+          console.log(`[Webhook] unhandled event type: ${event.type}`);
       }
 
       res.json({ received: true });
     } catch (e: any) {
-      log(`Webhook error: ${e.message}`);
+      console.log(`[Webhook] error: ${e.message}`);
       res.status(400).json({ error: e.message });
     }
   }
