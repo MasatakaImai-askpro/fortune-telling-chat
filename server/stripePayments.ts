@@ -68,7 +68,12 @@ export async function processStripeSession(session: {
       } else {
         // 展開済みオブジェクトの場合
         stripeSubscriptionId = session.subscription.id;
-        endDate = new Date(session.subscription.current_period_end * 1000);
+        const periodEndRaw = (session.subscription as any).current_period_end;
+        const periodEndMs =
+          typeof periodEndRaw === "number" && periodEndRaw > 0
+            ? periodEndRaw * 1000
+            : now.getTime() + 30 * 24 * 60 * 60 * 1000; // フォールバック: 1ヶ月
+        endDate = new Date(periodEndMs);
       }
     } else {
       endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
