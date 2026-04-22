@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { storage, computeRankFromRevenue, RANK_THRESHOLDS } from "./storage";
+import { log } from "./vite";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
