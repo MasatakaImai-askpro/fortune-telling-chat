@@ -253,6 +253,7 @@ wss.on("connection", async (ws, req) => {
           is_locked: m.isLocked,
           created_at: m.createdAt.toISOString(),
           attachments: [],
+          media_url: (m as any).mediaUrl || null,
           free: m.category === "free" && m.sender === "querent",
         })),
       }));
@@ -284,7 +285,7 @@ wss.on("connection", async (ws, req) => {
 
       if (data.type !== "chat_message") return;
 
-      const { sender, text, category, title, free: isFree, cost_pt: directCostPt } = data;
+      const { sender, text, category, title, free: isFree, cost_pt: directCostPt, media_url: mediaUrl } = data;
       let roomId = client.roomId;
 
       if (!roomId && client.fortunetellerId) {
@@ -403,7 +404,7 @@ wss.on("connection", async (ws, req) => {
       const msg = await storage.createMessage({
         roomId,
         sender,
-        text,
+        text: text || null,
         title: category === "treatment" ? (title || null) : null,
         category: msgCategory,
         costPt,
@@ -411,6 +412,7 @@ wss.on("connection", async (ws, req) => {
         isLocked,
         isReadByQuerent: isFromQuerent,
         isReadByFortuneteller: !isFromQuerent,
+        mediaUrl: mediaUrl || null,
       });
 
       broadcastToRoom(roomId, {
@@ -425,6 +427,7 @@ wss.on("connection", async (ws, req) => {
           is_locked: msg.isLocked,
           created_at: msg.createdAt.toISOString(),
           attachments: [],
+          media_url: msg.mediaUrl || null,
           free: msgFree,
           subscription_bonus: subscriptionBonus > 0 ? subscriptionBonus : undefined,
         },

@@ -548,7 +548,8 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   advisors: Advisor[]; onSelectAdvisor: (advisorId: number) => void;
 }) {
   const [text, setText] = useState("");
-  const [uploads, setUploads] = useState<any[]>([]);
+  const [uploads, setUploads] = useState<{ file: File; previewUrl: string; type: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [costToConfirm, setCostToConfirm] = useState<number | null>(null);
@@ -696,13 +697,41 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
     }
   };
 
-  const executeSend = (cost: number, free: boolean) => {
+  const executeSend = async (cost: number, free: boolean) => {
     if (!free && !(plan === "subscription" && subscriptionActive)) setPoints((p) => p - cost);
-    const payload: any = { type: "chat_message", sender: "querent", text: text.trim(), attachments: uploads, free };
-    if (!room) payload.advisor_id = advisor.id;
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(payload));
-    } else { console.warn("WebSocket not open"); }
+    const trimmed = text.trim();
+
+    const sendWs = (payload: object) => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify(payload));
+      } else { console.warn("WebSocket not open"); }
+    };
+
+    if (uploads.length > 0) {
+      setUploading(true);
+      try {
+        for (const u of uploads) {
+          const fd = new FormData();
+          fd.append("file", u.file);
+          const res = await fetch("/api/upload_chat_media", { method: "POST", body: fd, credentials: "include" });
+          if (!res.ok) throw new Error("アップロードに失敗しました");
+          const { url, type } = await res.json();
+          const payload: any = { type: "chat_message", sender: "querent", text: trimmed || null, media_url: url, media_type: type, free };
+          if (!room) payload.advisor_id = advisor!.id;
+          sendWs(payload);
+        }
+      } catch (e: any) {
+        alert(e.message || "ファイルのアップロードに失敗しました");
+        return;
+      } finally {
+        setUploading(false);
+      }
+    } else if (trimmed) {
+      const payload: any = { type: "chat_message", sender: "querent", text: trimmed, free };
+      if (!room) payload.advisor_id = advisor!.id;
+      sendWs(payload);
+    }
+
     setText(""); setUploads([]); setCostToConfirm(null); setShowTemplates(false); setIsFromTemplate(false); setInputError("");
   };
 
@@ -725,9 +754,9 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files; if (!files || !files.length) return;
     const newUploads = Array.from(files).map((f) => {
-      const url = URL.createObjectURL(f);
-      let type = "file"; if (f.type.startsWith("image/")) type = "image"; else if (f.type.startsWith("video/")) type = "video";
-      return { type, url, name: f.name };
+      const previewUrl = URL.createObjectURL(f);
+      const type = f.type.startsWith("image/") ? "image" : f.type.startsWith("video/") ? "video" : "file";
+      return { file: f, previewUrl, type, name: f.name };
     });
     setUploads(newUploads); e.target.value = "";
   };
@@ -789,7 +818,24 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                       </button>
                     </div>
                   ) : (
-                    <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-gray-900")}>{m.text}</p>
+                    <div className="space-y-1">
+                      {m.media_url && (
+                        m.media_url.match(/\.(mp4|webm|mov|avi)$/i) ? (
+                          <video src={m.media_url} controls className="max-w-[220px] rounded-xl" />
+                        ) : m.media_url.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) || !m.media_url.match(/\.\w{2,5}$/) ? (
+                          <img src={m.media_url} alt="画像" className="max-w-[220px] rounded-xl cursor-pointer"
+                            onClick={() => window.open(m.media_url, "_blank")} />
+                        ) : (
+                          <a href={m.media_url} target="_blank" rel="noopener noreferrer"
+                            className={cls("text-xs underline", m.sender === "querent" ? "text-white/80" : "text-pink-600")}>
+                            ファイルを開く
+                          </a>
+                        )
+                      )}
+                      {m.text && (
+                        <p className={cls("whitespace-pre-wrap leading-relaxed", m.sender === "querent" ? "text-white" : "text-gray-900")}>{m.text}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </li>
@@ -801,10 +847,20 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
         {uploads.length > 0 && (
           <div className="mb-2 flex gap-2 overflow-x-auto">
             {uploads.map((u, idx) => (
-              <div key={idx} className="min-w-[140px] border border-pink-200 bg-pink-50 rounded-2xl p-2 text-xs flex items-center gap-2 relative text-gray-700">
-                <Paperclip className="w-3 h-3 text-gray-500" />
-                <span className="truncate max-w-[96px]" title={u.name}>{u.name}</span>
-                <button onClick={() => removeUpload(idx)} className="absolute top-0 right-0 p-1 text-gray-400 hover:text-gray-700 text-sm leading-none"><X className="w-3 h-3" /></button>
+              <div key={idx} className="relative min-w-[80px] max-w-[120px]">
+                {u.type === "image" ? (
+                  <img src={u.previewUrl} alt={u.name} className="w-20 h-20 object-cover rounded-xl border border-pink-200" />
+                ) : u.type === "video" ? (
+                  <video src={u.previewUrl} className="w-20 h-20 object-cover rounded-xl border border-pink-200" />
+                ) : (
+                  <div className="min-w-[120px] border border-pink-200 bg-pink-50 rounded-xl p-2 text-xs flex items-center gap-1 text-gray-700">
+                    <Paperclip className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                    <span className="truncate">{u.name}</span>
+                  </div>
+                )}
+                <button onClick={() => removeUpload(idx)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center">
+                  <X className="w-3 h-3" />
+                </button>
               </div>
             ))}
           </div>
@@ -834,7 +890,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             </IconBtn>
             <input ref={fileInputRef} type="file" multiple accept="*/*" className="hidden" onChange={onFileChange} />
           </div>
-          <button onClick={onSend} disabled={text.trim() === "" && uploads.length === 0}
+          <button onClick={onSend} disabled={(text.trim() === "" && uploads.length === 0) || uploading}
             className="rounded-xl bg-pink-600 text-white px-5 py-2 h-10 text-sm font-semibold disabled:opacity-50" data-testid="button-send-message"
             title={isFromTemplate ? "無料テンプレ" : (plan === "subscription" && subscriptionActive ? "月額内" : `送信時 ${text.trim().length * getRankInfo(advisor?.rank || "SILVER").mult}pt 消費`)}>
             {isFromTemplate ? "無料送信" : "送信"}
@@ -876,20 +932,68 @@ function BottomNav({ activeTab, setActiveTab, unreadCount = 0 }: { activeTab: st
   );
 }
 
+function PeriodToggle({ period, onChange }: { period: "daily" | "monthly"; onChange: (p: "daily" | "monthly") => void }) {
+  return (
+    <div className="inline-flex rounded-xl border border-pink-200 overflow-hidden text-xs font-semibold">
+      <button
+        onClick={() => onChange("daily")}
+        data-testid="button-rank-daily"
+        className={cls("px-3 py-1 transition-colors", period === "daily" ? "bg-pink-600 text-white" : "bg-white text-gray-500 hover:bg-pink-50")}
+      >デイリー</button>
+      <button
+        onClick={() => onChange("monthly")}
+        data-testid="button-rank-monthly"
+        className={cls("px-3 py-1 transition-colors", period === "monthly" ? "bg-pink-600 text-white" : "bg-white text-gray-500 hover:bg-pink-50")}
+      >マンスリー</button>
+    </div>
+  );
+}
+
 function HomeTab({ advisors, favorites, onFav, onStartChat }: { advisors: Advisor[]; favorites: number[]; onFav: (id: number) => void; onStartChat: (id: number) => void }) {
   const [selectedGenre, setSelectedGenre] = useState(SAMPLE_GENRES[0]);
-  const sortedAdvisors = useMemo(() => [...advisors].sort(() => Math.random() - 0.5), [advisors]);
-  const filterAndSortByGenre = useMemo(() => sortedAdvisors.filter((a) => (a.tags || []).includes(selectedGenre) || a.headline.includes(selectedGenre)), [selectedGenre, sortedAdvisors]);
+  const [rankPeriod, setRankPeriod] = useState<"daily" | "monthly">("daily");
+  const [genrePeriod, setGenrePeriod] = useState<"daily" | "monthly">("daily");
+
+  const { data: rankScores } = useQuery<{ userId: number; score: number }[]>({
+    queryKey: ["/api/ranking", rankPeriod],
+    queryFn: () => fetch(`/api/ranking?period=${rankPeriod}`, { credentials: "include" }).then((r) => r.json()),
+  });
+  const { data: genreScores } = useQuery<{ userId: number; score: number }[]>({
+    queryKey: ["/api/ranking", genrePeriod],
+    queryFn: () => fetch(`/api/ranking?period=${genrePeriod}`, { credentials: "include" }).then((r) => r.json()),
+  });
+
+  const sortByScore = (list: Advisor[], scores?: { userId: number; score: number }[]) => {
+    if (!scores || scores.length === 0) return [...list].sort(() => Math.random() - 0.5);
+    const map = new Map(scores.map((s) => [s.userId, s.score]));
+    return [...list].sort((a, b) => (map.get(b.user_id) ?? 0) - (map.get(a.user_id) ?? 0));
+  };
+
+  const sortedAdvisors = useMemo(() => sortByScore(advisors, rankScores), [advisors, rankScores]);
+  const genreSorted = useMemo(() => sortByScore(advisors, genreScores), [advisors, genreScores]);
+  const filterAndSortByGenre = useMemo(
+    () => genreSorted.filter((a) => (a.tags || []).includes(selectedGenre) || a.headline.includes(selectedGenre)),
+    [selectedGenre, genreSorted],
+  );
 
   return (
     <section className="space-y-6">
       <FeaturedAdvisors advisors={advisors} onStartChat={onStartChat} onFav={onFav} favorites={favorites} />
       <div className="h-0 border-t border-pink-200 mx-auto w-11/12" />
-      <RankedCarousel title="総合ランキング TOP10" advisors={sortedAdvisors} onStartChat={onStartChat} onFav={onFav} favorites={favorites} limit={10} />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-sm font-semibold text-gray-900">総合ランキング TOP10</span>
+          <PeriodToggle period={rankPeriod} onChange={setRankPeriod} />
+        </div>
+        <RankedCarousel title="" advisors={sortedAdvisors} onStartChat={onStartChat} onFav={onFav} favorites={favorites} limit={10} />
+      </div>
       <div className="h-0 border-t border-pink-200 mx-auto w-11/12" />
       <div className="space-y-3">
         <div>
-          <h3 className="font-semibold text-gray-900 mb-2 text-sm">ジャンル別ランキング</h3>
+          <div className="flex items-center justify-between mb-2 px-1">
+            <h3 className="font-semibold text-gray-900 text-sm">ジャンル別ランキング</h3>
+            <PeriodToggle period={genrePeriod} onChange={setGenrePeriod} />
+          </div>
           <div className="flex flex-wrap gap-2 mb-3">
             {SAMPLE_GENRES.map((g) => {
               const color = genreColor(g); const active = selectedGenre === g;

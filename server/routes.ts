@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 
 const UPLOADS_DIR = path.resolve("uploads");
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -20,6 +21,12 @@ const upload = multer({
       cb(new Error("JPEG/PNG/WebP/GIF画像のみアップロード可能です"));
     }
   },
+});
+
+const mediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, _file, cb) => cb(null, true),
 });
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -167,6 +174,40 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     }
   });
 
+  app.post("/api/upload_chat_media", requireAuth, mediaUpload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "ファイルを選択してください" });
+      const originalExt = path.extname(file.originalname).toLowerCase();
+      const safeExt = originalExt || ".bin";
+      const filename = `chat_${req.session.userId}_${Date.now()}${safeExt}`;
+      const outputPath = path.join(UPLOADS_DIR, filename);
+      fs.writeFileSync(outputPath, file.buffer);
+      const url = `/uploads/${filename}`;
+      const type = file.mimetype.startsWith("image/") ? "image"
+        : file.mimetype.startsWith("video/") ? "video" : "file";
+      res.json({ url, type });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/ranking", async (req: Request, res: Response) => {
+    try {
+      const period = (req.query.period as string) === "monthly" ? "monthly" : "daily";
+      const profiles = await storage.getAllFortunetellerProfiles();
+      const scores = await Promise.all(
+        profiles.map(async (p) => ({
+          userId: p.userId,
+          score: await storage.getFortunetellerRankingScore(p.userId, period),
+        }))
+      );
+      res.json(scores);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get("/api/get_login_info", async (req: Request, res: Response) => {
     if (!req.session?.userId) {
       return res.json(null);
@@ -180,7 +221,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   app.post("/api/register_querent", async (req: Request, res: Response) => {
     try {
-      const { email, password, name, tel_number, postal_code, address, birthdate, zodiac_sign, birthplace, birthtime, worry_category, worry_message } = req.body;
+      const { email, password, name, address, birthdate, zodiac_sign, birthplace, birthtime, worry_category, worry_message } = req.body;
       if (!email || !password) {
         return res.status(400).json({ error: "必須フィールドが不足しています" });
       }
@@ -193,8 +234,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       await storage.createQuerentProfile({
         userId: user.id,
         name: name || "",
-        telNumber: tel_number || "",
-        postalCode: postal_code || "",
         address: address || "",
         birthdate: birthdate || "",
         zodiacSign: zodiac_sign || "",

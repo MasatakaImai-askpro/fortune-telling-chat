@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { validateEmail, validatePhone, validateZipcode, validatePassword } from "@/utils/validation";
+import { validateEmail, validatePassword } from "@/utils/validation";
 
 const zodiacSigns = [
   "牡羊座","牡牛座","双子座","蟹座","獅子座","乙女座",
@@ -19,7 +19,7 @@ const worryCategories = [
 
 type Fields = {
   email: string; password: string; confirmPassword: string; name: string;
-  telNumber: string; postalCode: string; address: string; birthdate: string;
+  address: string; birthdate: string;
   zodiacSign: string; birthplace: string; birthtime: string;
   worryCategory: string; worryMessage: string;
 };
@@ -29,7 +29,7 @@ export default function QuerentRegistration() {
   const [, setLocation] = useLocation();
   const [fields, setFields] = useState<Fields>({
     email: "", password: "", confirmPassword: "", name: "",
-    telNumber: "", postalCode: "", address: "", birthdate: "",
+    address: "", birthdate: "",
     zodiacSign: "牡羊座", birthplace: "", birthtime: "",
     worryCategory: "love", worryMessage: "",
   });
@@ -48,8 +48,6 @@ export default function QuerentRegistration() {
     e.password = validatePassword(fields.password) || undefined;
     if (fields.password !== fields.confirmPassword) e.confirmPassword = "パスワードが一致しません";
     if (!fields.name) e.name = "表示名は必須です";
-    e.telNumber = validatePhone(fields.telNumber) || undefined;
-    e.postalCode = validateZipcode(fields.postalCode) || undefined;
     if (!fields.address) e.address = "住所は必須です";
     if (!fields.birthdate) e.birthdate = "生年月日は必須です";
 
@@ -67,8 +65,6 @@ export default function QuerentRegistration() {
         email: fields.email,
         password: fields.password,
         name: fields.name,
-        tel_number: fields.telNumber,
-        postal_code: fields.postalCode,
         address: fields.address,
         birthdate: fields.birthdate,
         zodiac_sign: fields.zodiacSign,
@@ -118,8 +114,6 @@ export default function QuerentRegistration() {
           <InputField label="パスワード" field="password" type="password" placeholder="英字・数字を含む8文字以上" />
           <InputField label="パスワード(確認)" field="confirmPassword" type="password" placeholder="もう一度入力" />
           <InputField label="表示名" field="name" placeholder="占い太郎" />
-          <InputField label="電話番号" field="telNumber" type="tel" placeholder="09012345678" />
-          <InputField label="郵便番号" field="postalCode" placeholder="1234567" />
           <InputField label="住所" field="address" placeholder="東京都渋谷区..." />
           <InputField label="生年月日" field="birthdate" type="date" />
           <label className="block text-sm">

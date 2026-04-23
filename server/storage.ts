@@ -68,6 +68,7 @@ export interface IStorage {
   updateUser(id: number, data: Partial<{ email: string; role: string }>): Promise<User | undefined>;
 
   getFortuneteller6MonthRevenue(fortunetellerId: number): Promise<number>;
+  getFortunetellerRankingScore(fortunetellerId: number, period: "daily" | "monthly"): Promise<number>;
   hasFortunetellerRepliedInRoom(roomId: string, fortunetellerId: number, withinDays: number): Promise<boolean>;
   getUnreadCountForRoom(roomId: string, role: "querent" | "fortuneteller"): Promise<number>;
   markRoomRead(roomId: string, role: "querent" | "fortuneteller"): Promise<void>;
@@ -355,6 +356,45 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return Number(result[0]?.total || 0);
+  }
+
+  async getFortunetellerRankingScore(fortunetellerId: number, period: "daily" | "monthly"): Promise<number> {
+    const now = new Date();
+    const since = period === "daily"
+      ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+      : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+
+    const ptResult = await db.select({
+      total: sql<number>`COALESCE(SUM(COALESCE(${messages.costPt}, 0) + COALESCE(${messages.bonusPt}, 0)), 0)`,
+    })
+      .from(messages)
+      .innerJoin(rooms, eq(messages.roomId, rooms.id))
+      .where(and(
+        eq(rooms.fortunetellerId, fortunetellerId),
+        eq(messages.sender, "fortuneteller"),
+        gte(messages.createdAt, since),
+      ));
+
+    const regularPts = Number(ptResult[0]?.total || 0);
+
+    const subResult = await db.select({
+      cnt: sql<number>`COUNT(DISTINCT ${rooms.querentId})`,
+    })
+      .from(messages)
+      .innerJoin(rooms, eq(messages.roomId, rooms.id))
+      .innerJoin(subscriptions, and(
+        eq(subscriptions.querentId, rooms.querentId),
+        eq(subscriptions.status, "active"),
+      ))
+      .where(and(
+        eq(rooms.fortunetellerId, fortunetellerId),
+        eq(messages.sender, "fortuneteller"),
+        gte(messages.createdAt, since),
+      ));
+
+    const subCount = Number(subResult[0]?.cnt || 0);
+    const subBonus = period === "daily" ? subCount * 1000 : subCount * 5000;
+    return regularPts + subBonus;
   }
 
   async hasFortunetellerRepliedInRoom(roomId: string, fortunetellerId: number, withinDays: number): Promise<boolean> {

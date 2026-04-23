@@ -67,6 +67,16 @@ export async function runMigrations() {
       await client.query(`ALTER TABLE querent_profiles DROP COLUMN postal_code`);
     }
 
+    // ── messages.media_url: add if missing ───────────────────────────────────
+    const mediaUrlRes = await client.query<{ count: string }>(`
+      SELECT COUNT(*) AS count FROM information_schema.columns
+      WHERE table_name = 'messages' AND column_name = 'media_url'
+    `);
+    if (parseInt(mediaUrlRes.rows[0].count) === 0) {
+      console.log("[migrate] Adding messages.media_url column");
+      await client.query(`ALTER TABLE messages ADD COLUMN media_url text`);
+    }
+
     // ── subscriptions.stripe_subscription_id: add if missing ─────────────────
     const stripeSubIdRes = await client.query<{ count: string }>(`
       SELECT COUNT(*) AS count FROM information_schema.columns

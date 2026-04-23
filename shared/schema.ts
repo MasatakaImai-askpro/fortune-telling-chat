@@ -84,6 +84,7 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   unlockedAt: timestamp("unlocked_at"),
   earnedByAdvisor: boolean("earned_by_advisor").default(false),
+  mediaUrl: text("media_url"),
 });
 
 export const subscriptions = pgTable("subscriptions", {
