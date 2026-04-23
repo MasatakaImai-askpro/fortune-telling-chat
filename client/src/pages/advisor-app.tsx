@@ -26,6 +26,7 @@ type Message = {
   cost_pt?: number;
   is_locked?: boolean;
   free?: boolean;
+  media_url?: string | null;
 };
 
 type Profile = {
@@ -285,7 +286,22 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
               {m.is_locked ? (
                 <div className="text-xs italic text-gray-500">[施術 - 開封待ち: {m.cost_pt ?? 0}pt]</div>
               ) : (
-                m.text
+                <div className="space-y-1">
+                  {m.media_url && (
+                    m.media_url.match(/\.(mp4|webm|mov|avi)$/i) ? (
+                      <video src={m.media_url} controls className="max-w-[220px] rounded-xl" />
+                    ) : m.media_url.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) || !m.media_url.match(/\.\w{2,5}$/) ? (
+                      <img src={m.media_url} alt="画像" className="max-w-[220px] rounded-xl cursor-pointer"
+                        onClick={() => window.open(m.media_url!, "_blank")} />
+                    ) : (
+                      <a href={m.media_url} target="_blank" rel="noopener noreferrer"
+                        className={`text-xs underline ${m.sender === "fortuneteller" ? "text-white/80" : "text-pink-600"}`}>
+                        ファイルを開く
+                      </a>
+                    )
+                  )}
+                  {m.text && <span>{m.text}</span>}
+                </div>
               )}
               <div className="text-[10px] text-gray-400 mt-1 text-right">
                 {new Date(m.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
