@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle, Upload, AlertCircle, Banknote, ArrowDownToLine } from "lucide-react";
+import { Send, ChevronLeft, MessageCircle, LogOut, Users, Settings, Sparkles, CreditCard, CheckSquare, Square, Search, Clock, CalendarOff, Image, UserCircle, Upload, AlertCircle, Banknote, ArrowDownToLine, Paperclip, X } from "lucide-react";
 
 type Room = {
   id: string;
@@ -111,6 +111,9 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
   const [showKarte, setShowKarte] = useState(false);
   const [karte, setKarte] = useState<KarteData | null>(null);
   const [karteLoading, setKarteLoading] = useState(false);
+  const [treatmentFile, setTreatmentFile] = useState<{ file: File; previewUrl: string; type: string } | null>(null);
+  const [treatmentUploading, setTreatmentUploading] = useState(false);
+  const treatmentFileRef = useRef<HTMLInputElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const { data: advisorTemplates = [] } = useQuery<AdvisorTemplate[]>({ queryKey: ["/api/my_templates"] });
@@ -191,10 +194,36 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
     }
   }
 
-  function sendMessage() {
+  const onTreatmentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const previewUrl = URL.createObjectURL(f);
+    const type = f.type.startsWith("image/") ? "image" : f.type.startsWith("video/") ? "video" : "file";
+    setTreatmentFile({ file: f, previewUrl, type });
+    e.target.value = "";
+  };
+
+  async function sendMessage() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (msgCategory === "treatment") {
       if (treatmentPt <= 0) return;
+      let mediaUrl: string | null = null;
+      if (treatmentFile) {
+        setTreatmentUploading(true);
+        try {
+          const fd = new FormData();
+          fd.append("file", treatmentFile.file);
+          const res = await fetch("/api/upload_chat_media", { method: "POST", body: fd, credentials: "include" });
+          if (!res.ok) throw new Error("アップロードに失敗しました");
+          const json = await res.json();
+          mediaUrl = json.url;
+        } catch (e: any) {
+          alert(e.message || "ファイルのアップロードに失敗しました");
+          setTreatmentUploading(false);
+          return;
+        } finally {
+          setTreatmentUploading(false);
+        }
+      }
       const payload: any = {
         type: "chat_message",
         sender: "fortuneteller",
@@ -202,6 +231,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
         category: "treatment",
         title: treatmentTitle.trim() || null,
         cost_pt: treatmentPt,
+        media_url: mediaUrl,
       };
       wsRef.current.send(JSON.stringify(payload));
       const sysText = selectedMenuType === "divination" ? "鑑定メニューを送信しました" : "施術メニューを送信しました";
@@ -213,6 +243,7 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
       setTreatmentTitle("");
       setTreatmentPt(1000);
       setSelectedMenuType("treatment");
+      setTreatmentFile(null);
       return;
     }
     if (!input.trim()) return;
@@ -368,14 +399,41 @@ function ChatView({ room, onBack }: { room: Room; onBack: () => void }) {
                 </button>
               ))}
             </div>
+            {treatmentFile && (
+              <div className="relative inline-block">
+                {treatmentFile.type === "image" ? (
+                  <img src={treatmentFile.previewUrl} alt="preview" className="w-20 h-20 object-cover rounded-xl border border-amber-200" />
+                ) : treatmentFile.type === "video" ? (
+                  <video src={treatmentFile.previewUrl} className="w-20 h-20 object-cover rounded-xl border border-amber-200" />
+                ) : (
+                  <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-xl px-2 py-1.5 text-[10px] text-gray-700">
+                    <Paperclip className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate max-w-[100px]">{treatmentFile.file.name}</span>
+                  </div>
+                )}
+                <button onClick={() => setTreatmentFile(null)}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
-              <div className="text-[11px] text-amber-600 font-semibold" data-testid="text-treatment-cost">
-                {treatmentTitle ? <span>{treatmentTitle}: </span> : null}<b>{treatmentPt.toLocaleString()}pt</b>
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] text-amber-600 font-semibold" data-testid="text-treatment-cost">
+                  {treatmentTitle ? <span>{treatmentTitle}: </span> : null}<b>{treatmentPt.toLocaleString()}pt</b>
+                </div>
+                <button onClick={() => treatmentFileRef.current?.click()}
+                  data-testid="button-treatment-attach"
+                  title="ファイルを添付"
+                  className="w-7 h-7 rounded-full bg-pink-50 border border-pink-200 text-gray-500 flex items-center justify-center hover:bg-pink-100 transition-colors">
+                  <Paperclip className="w-3.5 h-3.5" />
+                </button>
+                <input ref={treatmentFileRef} type="file" accept="*/*" className="hidden" onChange={onTreatmentFileChange} />
               </div>
               <button onClick={sendMessage} data-testid="button-ft-send-treatment"
-                disabled={treatmentPt <= 0}
+                disabled={treatmentPt <= 0 || treatmentUploading}
                 className="rounded-xl px-4 py-1.5 text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors flex items-center gap-1.5">
-                <Send className="w-3 h-3" /> 送信
+                <Send className="w-3 h-3" /> {treatmentUploading ? "アップロード中..." : "送信"}
               </button>
             </div>
           </div>

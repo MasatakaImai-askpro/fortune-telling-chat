@@ -919,6 +919,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
           cost_pt: updated.costPt,
           is_locked: false,
           category: updated.category,
+          media_url: (updated as any).mediaUrl || null,
         },
       });
     } catch (e: any) {

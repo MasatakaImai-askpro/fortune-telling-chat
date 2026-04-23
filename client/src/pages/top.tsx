@@ -682,7 +682,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             ...t,
             messages: t.messages.map((m) =>
               String(m.id) === msgId
-                ? { ...m, text: data.unlocked_message.text, title: data.unlocked_message.title, is_locked: false }
+                ? { ...m, text: data.unlocked_message.text, title: data.unlocked_message.title, media_url: data.unlocked_message.media_url ?? m.media_url, is_locked: false }
                 : m
             ),
           },
