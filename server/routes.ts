@@ -1028,8 +1028,84 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const existing = await storage.getActiveSubscription(user.id);
       if (!existing) return res.status(400).json({ error: "有効なサブスクリプションがありません" });
 
+      // 1) Stripe 側を先にキャンセルする
+      if (existing.stripeSubscriptionId) {
+        const { getUncachableStripeClient } = await import("./stripeClient");
+        const stripe = await getUncachableStripeClient();
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(existing.stripeSubscriptionId);
+          // すでに Stripe 側でキャンセル済みの場合はスキップ
+          if (stripeSub.status !== "canceled") {
+            await stripe.subscriptions.cancel(existing.stripeSubscriptionId);
+          }
+          console.log(`[cancel_subscription] Stripe subscription ${existing.stripeSubscriptionId} cancelled for user ${user.id}`);
+        } catch (stripeErr: any) {
+          console.error(`[cancel_subscription] Stripe cancel failed for subId=${existing.stripeSubscriptionId}:`, stripeErr.message);
+          return res.status(500).json({
+            error: "Stripe側の解約処理に失敗しました。時間をおいてもう一度お試しいただくか、サポートにご連絡ください。",
+          });
+        }
+      } else {
+        // stripeSubscriptionId がない場合はログだけ残す
+        console.warn(`[cancel_subscription] No stripeSubscriptionId for subscription id=${existing.id}, user ${user.id}. Cancelling DB only.`);
+      }
+
+      // 2) Stripe 成功後にのみ DB を更新
       await storage.cancelSubscription(user.id);
       res.json({ message: "サブスクリプションを解約しました" });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ---- Stripe サブスクリプション同期監査（管理者専用） ----
+  app.post("/api/admin/sync_subscriptions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user || user.role !== "9") return res.status(403).json({ error: "権限がありません" });
+
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+
+      const allSubs = await storage.getAllSubscriptions();
+      const results: { id: number; querentId: number; stripeSubId: string; dbStatus: string; stripeStatus: string; action: string }[] = [];
+
+      for (const sub of allSubs) {
+        if (!sub.stripeSubscriptionId) continue;
+        let stripeStatus = "unknown";
+        let action = "none";
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
+          stripeStatus = stripeSub.status;
+
+          if (sub.status === "cancelled" && stripeSub.status === "active") {
+            // DB は解約済みだが Stripe はまだアクティブ → Stripe をキャンセル
+            await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+            action = "stripe_cancelled";
+            console.log(`[sync_subscriptions] Fixed: Stripe sub ${sub.stripeSubscriptionId} was active but DB was cancelled. Now cancelled on Stripe.`);
+          } else if (sub.status === "active" && stripeSub.status === "canceled") {
+            // DB はアクティブだが Stripe はキャンセル済み → DB を解約状態に
+            await storage.cancelSubscriptionByStripeId(sub.stripeSubscriptionId);
+            action = "db_cancelled";
+            console.log(`[sync_subscriptions] Fixed: DB sub ${sub.stripeSubscriptionId} was active but Stripe was cancelled. DB now cancelled.`);
+          }
+        } catch (e: any) {
+          stripeStatus = `error: ${e.message}`;
+          action = "error";
+        }
+        results.push({
+          id: sub.id,
+          querentId: sub.querentId,
+          stripeSubId: sub.stripeSubscriptionId,
+          dbStatus: sub.status,
+          stripeStatus,
+          action,
+        });
+      }
+
+      const fixed = results.filter((r) => r.action !== "none" && r.action !== "error");
+      console.log(`[sync_subscriptions] Audit complete. ${results.length} subscriptions checked, ${fixed.length} fixed.`);
+      res.json({ checked: results.length, fixed: fixed.length, results });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
