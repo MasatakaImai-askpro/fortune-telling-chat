@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-import { ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown, Sparkles, Search, Image, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
+import { ArrowLeftRight, Users, LogOut, Star, ChevronLeft, Edit2, Trash2, X, Check, Crown, Sparkles, Search, Image } from "lucide-react";
 
 type RankedAdvisor = {
   rank_position: number;
@@ -438,132 +438,7 @@ function UserManagementTab() {
   );
 }
 
-type Tab = "recommend" | "transfers" | "users" | "images" | "stripe";
-
-type SyncResult = {
-  id: number;
-  querentId: number;
-  stripeSubId: string;
-  dbStatus: string;
-  stripeStatus: string;
-  action: string;
-};
-
-function StripeSyncTab() {
-  const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<SyncResult[] | null>(null);
-  const [error, setError] = useState("");
-
-  async function runSync() {
-    setRunning(true);
-    setError("");
-    setResults(null);
-    try {
-      const res = await apiRequest("POST", "/api/admin/sync_subscriptions", {});
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "同期に失敗しました");
-      setResults(data.results);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const fixed = results?.filter((r) => r.action !== "none" && r.action !== "error") ?? [];
-  const errored = results?.filter((r) => r.action === "error") ?? [];
-  const mismatch = results?.filter((r) => r.action !== "none") ?? [];
-
-  return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      <div className="bg-pink-50 border border-pink-200 rounded-2xl p-4">
-        <h2 className="font-bold text-gray-900 mb-1 text-sm">Stripe サブスクリプション同期</h2>
-        <p className="text-xs text-gray-500 mb-3">
-          DB上の全サブスクリプションとStripe側の状態を照合します。<br />
-          「DBは解約済みだがStripeはアクティブ」のものは自動でStripe側をキャンセルします。<br />
-          「DBはアクティブだがStripeはキャンセル済み」のものはDB側を解約状態に更新します。
-        </p>
-        {error && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {error}
-          </div>
-        )}
-        <button
-          onClick={runSync}
-          disabled={running}
-          data-testid="button-stripe-sync"
-          className="flex items-center gap-2 bg-pink-600 text-white text-xs font-semibold px-4 py-2 rounded-xl disabled:opacity-50 hover:bg-pink-700 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${running ? "animate-spin" : ""}`} />
-          {running ? "同期中..." : "Stripe同期を実行"}
-        </button>
-      </div>
-
-      {results !== null && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-white border border-pink-200 rounded-xl p-3">
-              <div className="text-lg font-bold text-gray-900">{results.length}</div>
-              <div className="text-[10px] text-gray-500">確認済み</div>
-            </div>
-            <div className={`border rounded-xl p-3 ${fixed.length > 0 ? "bg-amber-50 border-amber-300" : "bg-white border-pink-200"}`}>
-              <div className={`text-lg font-bold ${fixed.length > 0 ? "text-amber-600" : "text-gray-900"}`}>{fixed.length}</div>
-              <div className="text-[10px] text-gray-500">修正済み</div>
-            </div>
-            <div className={`border rounded-xl p-3 ${errored.length > 0 ? "bg-red-50 border-red-300" : "bg-white border-pink-200"}`}>
-              <div className={`text-lg font-bold ${errored.length > 0 ? "text-red-600" : "text-gray-900"}`}>{errored.length}</div>
-              <div className="text-[10px] text-gray-500">エラー</div>
-            </div>
-          </div>
-
-          {mismatch.length === 0 && errored.length === 0 && (
-            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl p-3">
-              <CheckCircle className="w-4 h-4 flex-shrink-0" />
-              すべてのサブスクリプションは正常です。不整合は見つかりませんでした。
-            </div>
-          )}
-
-          {mismatch.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs font-semibold text-gray-700">修正されたレコード</div>
-              {mismatch.map((r) => (
-                <div key={r.id} className="bg-white border border-amber-200 rounded-xl p-3 text-xs space-y-0.5">
-                  <div className="flex items-center gap-2 font-semibold text-amber-700">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    相談者ID: {r.querentId}
-                  </div>
-                  <div className="text-gray-500 truncate">Stripe ID: {r.stripeSubId}</div>
-                  <div className="flex gap-3">
-                    <span className="text-gray-700">DB: <b>{r.dbStatus}</b></span>
-                    <span className="text-gray-700">Stripe: <b>{r.stripeStatus}</b></span>
-                  </div>
-                  <div className={`font-semibold ${r.action === "stripe_cancelled" ? "text-blue-600" : r.action === "db_cancelled" ? "text-orange-600" : "text-red-600"}`}>
-                    実行: {r.action === "stripe_cancelled" ? "Stripe側をキャンセル" : r.action === "db_cancelled" ? "DB側を解約に更新" : r.action}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {results.filter(r => r.action === "none").length > 0 && (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-gray-500 hover:text-gray-700 py-1">正常なレコードを表示 ({results.filter(r => r.action === "none").length}件)</summary>
-              <div className="mt-2 space-y-1">
-                {results.filter(r => r.action === "none").map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-3 py-1.5">
-                    <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                    <span className="text-gray-500">相談者 {r.querentId}</span>
-                    <span className="ml-auto text-gray-400">{r.dbStatus} / Stripe:{r.stripeStatus}</span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+type Tab = "recommend" | "transfers" | "users" | "images";
 
 type FTProfile = {
   user_id: number;
@@ -707,7 +582,6 @@ export default function AdminApp() {
     { key: "transfers", label: "振込申請", icon: ArrowLeftRight },
     { key: "users", label: "ユーザー", icon: Users },
     { key: "images", label: "画像管理", icon: Image },
-    { key: "stripe", label: "Stripe同期", icon: RefreshCw },
   ];
 
   return (
@@ -725,7 +599,6 @@ export default function AdminApp() {
         {tab === "transfers" && <TransfersTab />}
         {tab === "users" && <UserManagementTab />}
         {tab === "images" && <ImageManagementTab />}
-        {tab === "stripe" && <StripeSyncTab />}
       </div>
 
       <nav className="border-t border-pink-200 bg-white flex justify-around py-2 safe-area-bottom" data-testid="nav-admin-bottom">
