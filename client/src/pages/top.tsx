@@ -550,6 +550,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
   const [text, setText] = useState("");
   const [uploads, setUploads] = useState<{ file: File; previewUrl: string; type: string; name: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [showAdvisorProfile, setShowAdvisorProfile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [costToConfirm, setCostToConfirm] = useState<number | null>(null);
@@ -770,10 +771,14 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
       {costToConfirm !== null && <ConfirmModal cost={costToConfirm} onConfirm={onConfirmSend} onCancel={() => setCostToConfirm(null)} querentInfo={querentInfo} />}
       <div className="sticky top-0 z-10 -mx-4 px-4 pt-2 pb-0 bg-white/90 backdrop-blur border-b border-pink-200">
         <div className="flex items-center gap-3 py-1">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">
+          <button
+            onClick={() => setShowAdvisorProfile(true)}
+            data-testid="button-chat-advisor-icon"
+            className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 hover:opacity-80 transition-opacity"
+          >
             {advisor.icon_image ? <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover ring-2 ring-pink-200" /> : advisor.name.charAt(0)}
-          </div>
-          <div className="min-w-0">
+          </button>
+          <button onClick={() => setShowAdvisorProfile(true)} className="min-w-0 text-left hover:opacity-70 transition-opacity" data-testid="button-chat-advisor-name">
             <div className="font-semibold leading-tight truncate text-gray-900" data-testid="text-chat-advisor-name">{advisor.name}</div>
             <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
               <Ribbon rank={advisor.rank} />
@@ -781,7 +786,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                 <span className="text-emerald-600">月額内で使い放題</span>
               )}
             </div>
-          </div>
+          </button>
           <button className="ml-auto text-xs font-semibold rounded-xl px-3 py-1 bg-pink-50 border border-pink-200 text-gray-700" onClick={onBack} data-testid="button-back-to-list">一覧へ</button>
         </div>
       </div>
@@ -897,6 +902,70 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
           </button>
         </div>
       </div>
+
+      {showAdvisorProfile && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" onClick={() => setShowAdvisorProfile(false)}>
+          <div className="w-full max-w-md bg-white border border-pink-200 rounded-2xl overflow-hidden max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} data-testid="modal-advisor-profile">
+            {advisor.profile_image ? (
+              <img src={advisor.profile_image} className="w-full h-40 object-cover" alt="" data-testid="img-chat-advisor-banner" />
+            ) : (
+              <div className="w-full h-28 bg-gradient-to-br from-pink-200 to-pink-300" />
+            )}
+            <div className="p-4">
+              <div className="flex items-center gap-3 -mt-10 relative z-10">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center text-xl font-bold text-white flex-shrink-0 ring-4 ring-white">
+                  {advisor.icon_image ? <img src={advisor.icon_image} alt="" className="w-full h-full rounded-full object-cover" /> : advisor.name.charAt(0)}
+                </div>
+                <div className="min-w-0 pt-8">
+                  <div className="font-semibold truncate flex items-center gap-2 text-gray-900">{advisor.name} <Ribbon rank={advisor.rank} /></div>
+                  {advisor.rank_label && <div className="text-[11px] text-gray-500">{advisor.rank_label}</div>}
+                </div>
+              </div>
+              {advisor.headline && <h4 className="mt-3 font-semibold text-pink-700">{advisor.headline}</h4>}
+              {((advisor.style || []).length > 0 || (advisor.divination_methods || []).length > 0) && (
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  {(advisor.style || []).map((s) => (
+                    <span key={s} className="text-[11px] bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full">{s}</span>
+                  ))}
+                  {(advisor.divination_methods || []).map((m) => (
+                    <span key={m} className="text-[11px] bg-cyan-100 text-cyan-700 border border-cyan-300 px-2 py-0.5 rounded-full">{m}</span>
+                  ))}
+                </div>
+              )}
+              {(advisor.business_hours || advisor.regular_holidays) && (
+                <div className="mt-3 space-y-1.5 bg-pink-50 rounded-xl p-3 border border-pink-200">
+                  {advisor.business_hours && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <Clock className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" />
+                      <span>営業時間: {advisor.business_hours}</span>
+                    </div>
+                  )}
+                  {advisor.regular_holidays && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <CalendarOff className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" />
+                      <span>定休日: {advisor.regular_holidays}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(advisor.long_intro || advisor.intro) && (
+                <div className="mt-3">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700" data-testid="text-chat-advisor-intro">
+                    {advisor.long_intro || advisor.intro}
+                  </p>
+                </div>
+              )}
+              <button
+                className="mt-4 w-full rounded-xl py-2 text-xs font-semibold bg-pink-50 border border-pink-200 text-gray-700"
+                onClick={() => setShowAdvisorProfile(false)}
+                data-testid="button-close-advisor-profile"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
