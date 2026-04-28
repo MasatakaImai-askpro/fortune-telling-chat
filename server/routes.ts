@@ -8,6 +8,96 @@ import multer from "multer";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs";
+import nodemailer from "nodemailer";
+
+function createMailTransporter() {
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || "587", 10),
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_HOST_USER,
+      pass: process.env.EMAIL_HOST_PASSWORD,
+    },
+    tls: {
+      ciphers: "SSLv3",
+      rejectUnauthorized: false,
+    },
+  });
+}
+
+async function sendPasswordResetEmail(toEmail: string, resetUrl: string) {
+  const transporter = createMailTransporter();
+  const fromAddress = process.env.EMAIL_HOST_USER;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>パスワード再設定</title>
+</head>
+<body style="margin:0;padding:0;background-color:#fff5f7;font-family:sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fff5f7;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #f9a8d4;overflow:hidden;max-width:600px;width:100%;">
+          <tr>
+            <td style="background-color:#db2777;padding:28px 32px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:22px;letter-spacing:0.05em;">占いチャット</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:40px 32px;">
+              <h2 style="margin:0 0 16px;color:#1f2937;font-size:18px;">パスワード再設定のご案内</h2>
+              <p style="margin:0 0 12px;color:#4b5563;font-size:15px;line-height:1.7;">
+                パスワード再設定のリクエストを受け付けました。<br>
+                下のボタンをクリックして、新しいパスワードを設定してください。
+              </p>
+              <p style="margin:0 0 28px;color:#6b7280;font-size:13px;line-height:1.6;">
+                ※ このリンクは発行から <strong>30分間</strong> のみ有効です。<br>
+                ※ このメールにお心当たりがない場合は、そのまま破棄してください。
+              </p>
+              <table cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center">
+                    <a href="${resetUrl}"
+                       style="display:inline-block;background-color:#db2777;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 40px;border-radius:8px;letter-spacing:0.05em;">
+                      パスワードを再設定する
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:28px 0 0;color:#9ca3af;font-size:12px;line-height:1.6;">
+                ボタンが機能しない場合は、以下のURLをブラウザに直接貼り付けてください。<br>
+                <a href="${resetUrl}" style="color:#db2777;word-break:break-all;">${resetUrl}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#fff5f7;padding:20px 32px;text-align:center;border-top:1px solid #fce7f3;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;">
+                © 占いチャット. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  await transporter.sendMail({
+    from: `占いチャット <${fromAddress}>`,
+    to: toEmail,
+    subject: "【占いチャット】パスワード再設定のご案内",
+    text: `パスワード再設定リンク（30分以内にアクセスしてください）:\n${resetUrl}\n\nこのメールにお心当たりがない場合は破棄してください。`,
+    html: htmlBody,
+  });
+}
 
 const UPLOADS_DIR = path.resolve("uploads");
 
@@ -92,15 +182,26 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const token = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
       await storage.createPasswordResetToken(user.id, token, expiresAt);
-      const isDev = process.env.NODE_ENV !== "production";
-      if (isDev) {
+
+      const appUrl = process.env.APP_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+      const resetUrl = `${appUrl}/password_reset?token=${token}`;
+
+      const emailConfigured = process.env.EMAIL_HOST && process.env.EMAIL_HOST_USER && process.env.EMAIL_HOST_PASSWORD;
+
+      if (emailConfigured) {
+        try {
+          await sendPasswordResetEmail(user.email, resetUrl);
+          res.json({ message: "登録されているメールアドレスの場合、リセットリンクが発行されます。" });
+        } catch (mailErr: any) {
+          log(`[email] 送信エラー: ${mailErr.message}`);
+          res.status(500).json({ error: "メールの送信に失敗しました。しばらく経ってから再試行してください。" });
+        }
+      } else {
         res.json({
           message: "パスワードリセットリンクが発行されました。30分以内にリセットしてください。",
           token,
-          reset_url: `/password_reset?token=${token}`,
+          reset_url: resetUrl,
         });
-      } else {
-        res.json({ message: "登録されているメールアドレスの場合、リセットリンクが発行されます。" });
       }
     } catch (e: any) {
       res.status(500).json({ error: e.message });
