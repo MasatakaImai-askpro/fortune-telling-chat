@@ -9,6 +9,34 @@ type Fields = {
   name: string; headline: string; intro: string;
 };
 
+type InputFieldProps = {
+  label: string;
+  field: keyof Fields;
+  type?: string;
+  placeholder?: string;
+  maxLen?: number;
+  value: string;
+  error?: string;
+  charCount?: number;
+  onChange: (field: keyof Fields, value: string) => void;
+};
+
+function InputField({ label, field, type = "text", placeholder = "", maxLen, value, error, onChange }: InputFieldProps) {
+  return (
+    <label className="block text-sm">
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-gray-700">{label}</span>
+        <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md">必須</span>
+        {maxLen && <span className="text-[10px] text-gray-400 ml-auto">{value.length}/{maxLen}</span>}
+      </div>
+      <input type={type} value={value} onChange={(e) => onChange(field, e.target.value)} placeholder={placeholder}
+        data-testid={`input-${field}`} maxLength={maxLen}
+        className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
+      {error && <p className="text-red-500 text-xs mt-0.5">{error}</p>}
+    </label>
+  );
+}
+
 export default function FortunetellerRegistration() {
   const { refreshUser } = useAuth();
   const [, setLocation] = useLocation();
@@ -62,22 +90,6 @@ export default function FortunetellerRegistration() {
     }
   }
 
-  function InputField({ label, field, type = "text", placeholder = "", maxLen }: { label: string; field: keyof Fields; type?: string; placeholder?: string; maxLen?: number }) {
-    return (
-      <label className="block text-sm">
-        <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-gray-700">{label}</span>
-          <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md">必須</span>
-          {maxLen && <span className="text-[10px] text-gray-400 ml-auto">{fields[field].length}/{maxLen}</span>}
-        </div>
-        <input type={type} value={fields[field]} onChange={(e) => set(field, e.target.value)} placeholder={placeholder}
-          data-testid={`input-${field}`} maxLength={maxLen}
-          className="mt-1 w-full rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none" />
-        {errors[field] && <p className="text-red-500 text-xs mt-0.5">{errors[field]}</p>}
-      </label>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white text-gray-900 flex items-start justify-center p-6 pt-10">
       <div className="w-full max-w-md bg-white border border-pink-200 rounded-2xl p-6 shadow-lg space-y-5">
@@ -91,11 +103,11 @@ export default function FortunetellerRegistration() {
           </div>
         )}
         <div className="space-y-3">
-          <InputField label="メールアドレス" field="email" type="email" placeholder="you@example.com" />
-          <InputField label="パスワード" field="password" type="password" placeholder="英字・数字を含む8文字以上" />
-          <InputField label="パスワード(確認)" field="confirmPassword" type="password" placeholder="もう一度入力" />
-          <InputField label="占い師名" field="name" placeholder="占いの花" maxLen={20} />
-          <InputField label="キャッチコピー" field="headline" placeholder="あなたの未来を照らします" maxLen={30} />
+          <InputField label="メールアドレス" field="email" type="email" placeholder="you@example.com" value={fields.email} error={errors.email} onChange={set} />
+          <InputField label="パスワード" field="password" type="password" placeholder="英字・数字を含む8文字以上" value={fields.password} error={errors.password} onChange={set} />
+          <InputField label="パスワード(確認)" field="confirmPassword" type="password" placeholder="もう一度入力" value={fields.confirmPassword} error={errors.confirmPassword} onChange={set} />
+          <InputField label="占い師名" field="name" placeholder="占いの花" maxLen={20} value={fields.name} error={errors.name} onChange={set} />
+          <InputField label="キャッチコピー" field="headline" placeholder="あなたの未来を照らします" maxLen={30} value={fields.headline} error={errors.headline} onChange={set} />
           <label className="block text-sm">
             <div className="flex items-center gap-1 flex-wrap">
               <span className="text-gray-700">自己紹介</span>
