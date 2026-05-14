@@ -89,6 +89,7 @@ type ChatMessage = {
   created_at: string;
   attachments?: any[];
   free?: boolean;
+  media_url?: string | null;
 };
 
 type Thread = {
