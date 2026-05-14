@@ -514,7 +514,7 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
               <div className="flex items-center justify-between gap-1">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-semibold text-sm text-gray-900 truncate">{room.fortuneteller_name}</span>
-                  {isSlotAdvisor && slotData?.count > 0 && (
+                  {isSlotAdvisor && (slotData?.count ?? 0) > 0 && (
                     <span className="flex-shrink-0 text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5 font-semibold leading-none">
                       サブスク無料
                     </span>
