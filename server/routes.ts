@@ -945,7 +945,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
-      const querentId = parseInt(req.params.querentId);
+      const querentId = parseInt(req.params.querentId as string);
       const profile = await storage.getQuerentProfile(querentId);
       if (!profile) return res.status(404).json({ error: "見つかりません" });
       res.json({
@@ -1187,7 +1187,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const schema = z.object({ menu_type: z.enum(["treatment", "divination"]).optional(), name: z.string().min(1).max(50).optional(), required_pt: z.number().int().min(0).optional() });
       const parsed = schema.parse(req.body);
       const data: any = {};
@@ -1204,7 +1204,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
-      await storage.deleteAdvisorMenu(parseInt(req.params.id));
+      await storage.deleteAdvisorMenu(parseInt(req.params.id as string));
       res.json({ message: "削除しました" });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
@@ -1247,7 +1247,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
       const { text } = z.object({ text: z.string().min(1).max(500) }).parse(req.body);
-      const updated = await storage.updateAdvisorTemplate(parseInt(req.params.id), { text });
+      const updated = await storage.updateAdvisorTemplate(parseInt(req.params.id as string), { text });
       if (!updated) return res.status(404).json({ error: "テンプレートが見つかりません" });
       res.json({ id: updated.id, text: updated.text });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -1257,7 +1257,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "2") return res.status(403).json({ error: "権限がありません" });
-      await storage.deleteAdvisorTemplate(parseInt(req.params.id));
+      await storage.deleteAdvisorTemplate(parseInt(req.params.id as string));
       res.json({ message: "削除しました" });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
   });
@@ -1606,7 +1606,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     upload.single("file"),
     async (req: Request, res: Response) => {
       try {
-        const userId = parseInt(req.params.userId);
+        const userId = parseInt(req.params.userId as string);
         const imageType = req.body.image_type as "banner" | "icon";
         if (!["banner", "icon"].includes(imageType)) return res.status(400).json({ error: "image_typeはbanner/iconのいずれかです" });
         if (!req.file) return res.status(400).json({ error: "ファイルが必要です" });

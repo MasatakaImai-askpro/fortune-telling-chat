@@ -537,7 +537,7 @@ async function seedDatabase() {
         headline: ft.headline,
         intro: ft.intro,
         isRecommended: i < 5,
-        style: styles[i % 6],
+        style: [styles[i % 6]],
         divinationMethods: ftMethods,
       });
     }
@@ -591,8 +591,6 @@ async function seedDatabase() {
       await storage.createQuerentProfile({
         userId: user.id,
         name: q.name,
-        telNumber: `090${String(10000000 + i * 111111).slice(0, 8)}`,
-        postalCode: `${100 + i}0001`,
         address: addresses[i % 10],
         birthdate: `${year}-${month}-${day}`,
         zodiacSign: q.zodiac,
@@ -642,11 +640,11 @@ async function backfillStylesAndMethods() {
     let updated = 0;
     for (let i = 0; i < profiles.length; i++) {
       const p = profiles[i];
-      const needsStyle = !p.style || p.style === "";
+      const needsStyle = !p.style || p.style.length === 0;
       const needsMethods = !p.divinationMethods || p.divinationMethods.length === 0;
       if (needsStyle || needsMethods) {
         const data: any = {};
-        if (needsStyle) data.style = styles[i % styles.length];
+        if (needsStyle) data.style = [styles[i % styles.length]];
         if (needsMethods) data.divinationMethods = [methods[i % 5], methods[(i + 2) % 5]].filter((v, j, a) => a.indexOf(v) === j);
         await storage.updateFortunetellerProfile(p.userId, data);
         updated++;

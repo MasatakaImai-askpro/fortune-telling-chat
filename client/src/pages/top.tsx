@@ -830,7 +830,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                           <video src={m.media_url} controls className="max-w-[220px] rounded-xl" />
                         ) : m.media_url.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) || !m.media_url.match(/\.\w{2,5}$/) ? (
                           <img src={m.media_url} alt="画像" className="max-w-[220px] rounded-xl cursor-pointer"
-                            onClick={() => window.open(m.media_url, "_blank")} />
+                            onClick={() => window.open(m.media_url ?? undefined, "_blank")} />
                         ) : (
                           <a href={m.media_url} target="_blank" rel="noopener noreferrer"
                             className={cls("text-xs underline", m.sender === "querent" ? "text-white/80" : "text-pink-600")}>
