@@ -1158,10 +1158,16 @@ function QuerentListView() {
           )}
           {selected.size > 0 && (
             <>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <span>{selected.size}名に送信</span>
-                <span className="ml-auto">{messageText.length}/150</span>
-              </div>
+              {selected.size > 100 ? (
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-testid="text-bulk-limit-warning">
+                  101件以上が選択されています。100件以内まで一斉送信が可能です。
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <span>{selected.size}名に送信</span>
+                  <span className="ml-auto">{messageText.length}/150</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -1169,11 +1175,12 @@ function QuerentListView() {
                   onChange={(e) => { if (e.target.value.length <= 150) setMessageText(e.target.value); }}
                   placeholder="メッセージを入力（150文字以内）..."
                   data-testid="input-bulk-message"
-                  className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none"
+                  disabled={selected.size > 100}
+                  className="flex-1 rounded-xl bg-pink-50 border border-pink-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-pink-400 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSend}
-                  disabled={sending || !messageText.trim()}
+                  disabled={sending || !messageText.trim() || selected.size > 100}
                   data-testid="button-send-bulk"
                   className="w-9 h-9 rounded-full bg-pink-600 hover:bg-pink-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
