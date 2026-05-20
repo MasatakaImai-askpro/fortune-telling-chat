@@ -1090,6 +1090,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
   const [localInfo, setLocalInfo] = useState<QuerentInfo | null>(null);
   const [subLoading, setSubLoading] = useState(false);
   const [subMsg, setSubMsg] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
     if (queInfoFromQuery && !localInfo) setLocalInfo(queInfoFromQuery);
@@ -1180,6 +1181,29 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
 
   return (
     <section className="space-y-4">
+      {confirmCancel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" data-testid="modal-cancel-confirm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-gray-900 text-base">サブスクリプションを解約しますか？</h3>
+            <p className="text-sm text-gray-600">解約後も有効期限までご利用いただけますが、次回更新はされません。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmCancel(false)}
+                data-testid="button-cancel-confirm-no"
+                className="flex-1 rounded-xl py-2 text-sm font-semibold border border-pink-200 text-gray-700 bg-white hover:bg-pink-50 transition-colors">
+                キャンセル
+              </button>
+              <button
+                onClick={async () => { setConfirmCancel(false); await handleCancelSubscription(); }}
+                disabled={subLoading}
+                data-testid="button-cancel-confirm-yes"
+                className="flex-1 rounded-xl py-2 text-sm font-semibold bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50 transition-colors">
+                解約する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex gap-2 flex-wrap">
         {[
           { id: "plan", label: "プラン" },
@@ -1211,7 +1235,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
                 有効期限: <b className="text-gray-900">{new Date(queInfo.subscription_end_date).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })}</b>
                 <span className="ml-2">（残り{Math.max(0, Math.ceil((new Date(queInfo.subscription_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}日）</span>
               </div>
-              <button onClick={handleCancelSubscription} disabled={subLoading} data-testid="button-cancel-subscription"
+              <button onClick={() => setConfirmCancel(true)} disabled={subLoading} data-testid="button-cancel-subscription"
                 className="mt-2 rounded-xl px-4 py-1.5 text-xs font-semibold bg-white border border-pink-200 text-gray-700 hover:bg-pink-50 disabled:opacity-50 transition-colors">
                 {subLoading ? "処理中..." : "解約する"}
               </button>
