@@ -1042,7 +1042,7 @@ function HomeTab({ advisors, favorites, onFav, onStartChat }: { advisors: Adviso
   const sortedAdvisors = useMemo(() => sortByScore(advisors, rankScores), [advisors, rankScores]);
   const genreSorted = useMemo(() => sortByScore(advisors, genreScores), [advisors, genreScores]);
   const filterAndSortByGenre = useMemo(
-    () => genreSorted.filter((a) => (a.tags || []).includes(selectedGenre) || a.headline.includes(selectedGenre)),
+    () => genreSorted.filter((a) => a.genre === selectedGenre),
     [selectedGenre, genreSorted],
   );
 
