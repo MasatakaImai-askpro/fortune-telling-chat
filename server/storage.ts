@@ -393,7 +393,7 @@ export class DatabaseStorage implements IStorage {
       ));
 
     const subCount = Number(subResult[0]?.cnt || 0);
-    const subBonus = subCount * 5000;
+    const subBonus = period === "daily" ? subCount * 1000 : subCount * 5000;
     return regularPts + subBonus;
   }
 
