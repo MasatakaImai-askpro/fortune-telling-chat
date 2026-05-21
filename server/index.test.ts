@@ -638,6 +638,57 @@ describe("Stripe Webhook /api/stripe/webhook", () => {
       expect(res.status).toBe(200);
       expect(res.body.received).toBe(true);
     });
+    // 説明：invoice.payment_succeeded で period_end がなく lines.data からフォールバックされること
+    // 条件：period_end 未設定、lines.data[0].period.end に値がある
+    it("invoice.payment_succeeded（period_end なし・lines からフォールバック）→ renewSubscription が呼ばれる", async () => {
+      const futureEpoch = Math.floor(Date.now() / 1000) + 86400;
+      const payload = JSON.stringify({
+        type: "invoice.payment_succeeded",
+        data: {
+          object: {
+            billing_reason: "subscription_cycle",
+            subscription: "sub_lines_fallback",
+            lines: { data: [{ period: { end: futureEpoch } }] },
+          },
+        },
+      });
+
+      const res = await request(app)
+        .post("/api/stripe/webhook")
+        .set("Content-Type", "application/json")
+        .send(payload);
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.renewSubscription).toHaveBeenCalledWith(
+        "sub_lines_fallback",
+        expect.any(Date)
+      );
+      const [, endDate] = mockStorage.renewSubscription.mock.calls[0];
+      expect(endDate.getTime()).toBe(futureEpoch * 1000);
+    });
+
+    // 説明：invoice.payment_succeeded で period_end が 0（無効値）のとき renewSubscription をスキップすること
+    // 条件：period_end = 0（periodEndSec が null になる）
+    it("invoice.payment_succeeded（period_end=0 で無効）→ renewSubscription をスキップ", async () => {
+      const payload = JSON.stringify({
+        type: "invoice.payment_succeeded",
+        data: {
+          object: {
+            billing_reason: "subscription_cycle",
+            subscription: "sub_zero_end",
+            period_end: 0,
+          },
+        },
+      });
+
+      const res = await request(app)
+        .post("/api/stripe/webhook")
+        .set("Content-Type", "application/json")
+        .send(payload);
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.renewSubscription).not.toHaveBeenCalled();
+    });
   });
 
   describe("webhookSecret が設定されているとき（本番環境）", () => {
@@ -1098,5 +1149,74 @@ describe("WebSocket メッセージ処理", () => {
     expect(roomInitMsg.type).toBe("room_init");
     expect(roomInitMsg.room_id).toBe("room-new-999");
     expect(mockStorage.getOrCreateRoom).toHaveBeenCalledWith(9, 80);
+  });
+
+  // 説明：fortuneteller の treatment メッセージは costPt=directCostPt・isLocked=true になること
+  // 条件：sender="fortuneteller", category="treatment", cost_pt="5000"
+  it("fortuneteller の treatment メッセージ → costPt=5000・isLocked=true", async () => {
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 11, querentId: 90 });
+    mockStorage.getActiveSubscription.mockResolvedValue(null);
+
+    const cookie = await getSessionCookie(90);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-ft-treatment", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "fortuneteller",
+        text: "ヒーリング施術を行います",
+        category: "treatment",
+        cost_pt: "5000",
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 150));
+    ws.terminate();
+
+    expect(mockStorage.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        costPt: 5000,
+        isLocked: true,
+        category: "treatment",
+      })
+    );
+  });
+
+  // 説明：サブスクあり・スロット満杯（5件）・未登録占い師のとき有料になり deductPoints が呼ばれること
+  // 条件：standard プラン、slotAdvisors=[1,2,3,4,5]（満杯）、占い師ID=12（未登録）
+  it("サブスクあり・スロット満杯・未登録占い師 → deductPoints が呼ばれる", async () => {
+    const testText = "占いお願いします";
+    const expectedCost = testText.length * RANK_MULT["NORMAL"];
+
+    mockStorage.getActiveSubscription.mockResolvedValue({
+      planType: "standard",
+      startDate: new Date(),
+    });
+    mockStorage.getSubscriptionSlotAdvisors.mockResolvedValue([1, 2, 3, 4, 5]);
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 12, querentId: 100 });
+    mockStorage.getFortunetellerProfile.mockResolvedValue({ rank: "NORMAL" });
+    mockStorage.deductPoints.mockResolvedValue(true);
+
+    const cookie = await getSessionCookie(100);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-slot-full", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "querent",
+        text: testText,
+        category: "length_paying",
+        free: false,
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 200));
+    ws.terminate();
+
+    expect(mockStorage.deductPoints).toHaveBeenCalledWith(100, expectedCost);
   });
 });

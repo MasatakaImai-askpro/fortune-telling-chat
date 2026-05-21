@@ -123,4 +123,93 @@ describe("processStripeSession", () => {
     expect(callArg.stripeSubscriptionId).toBe("sub_abc123");
     expect(callArg.endDate.getTime()).toBeCloseTo(futureUnix * 1000, -3);
   });
+
+  // 説明：markStripeSessionProcessed が false を返す場合（競合状態による二重処理防止）
+  // 条件：isStripeSessionProcessed=false だが markStripeSessionProcessed=false（他のプロセスが先に処理した）
+  it("markStripeSessionProcessed=false のとき { status: 'already_processed' } を返す", async () => {
+    mockStorage.markStripeSessionProcessed.mockResolvedValue(false);
+
+    const result = await processStripeSession(baseSession);
+    expect(result).toEqual({ status: "already_processed" });
+  });
+
+  // 説明：points が 0 のとき addQuerentPoints は呼ばれないこと
+  // 条件：metadata.points = "0"（ソースの if (points > 0) 分岐を通らない）
+  it("points=0 のとき addQuerentPoints は呼ばれない", async () => {
+    const result = await processStripeSession({
+      ...baseSession,
+      metadata: { querent_id: "42", purchase_type: "points", points: "0" },
+    });
+
+    expect(result).toEqual({ status: "ok", type: "points", points: 0 });
+    expect(mockStorage.addQuerentPoints).not.toHaveBeenCalled();
+  });
+
+  // 説明：premium プランのとき createSubscription に amount=50000 が渡されること
+  // 条件：metadata.plan_type = "premium"
+  it("premium プランで amount=50000 が createSubscription に渡される", async () => {
+    await processStripeSession({
+      ...baseSession,
+      metadata: { querent_id: "42", purchase_type: "subscription", plan_type: "premium" },
+    });
+
+    expect(mockStorage.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 50000, planType: "premium" })
+    );
+  });
+
+  // 説明：standard プランのとき createSubscription に amount=20000 が渡されること
+  // 条件：metadata.plan_type = "standard"
+  it("standard プランで amount=20000 が createSubscription に渡される", async () => {
+    await processStripeSession({
+      ...baseSession,
+      metadata: { querent_id: "42", purchase_type: "subscription", plan_type: "standard" },
+    });
+
+    expect(mockStorage.createSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 20000, planType: "standard" })
+    );
+  });
+
+  // 説明：mode="subscription" かつ subscription が文字列IDのみの場合、
+  //        endDate はフォールバックで約30日後になり stripeSubscriptionId がセットされること
+  // 条件：mode = "subscription", subscription = "sub_string_only"（文字列ID）
+  it("subscription が文字列IDのみのとき endDate が約30日後・stripeSubscriptionId がセットされる", async () => {
+    const before = Date.now();
+
+    await processStripeSession({
+      ...baseSession,
+      mode: "subscription",
+      metadata: { querent_id: "42", purchase_type: "subscription", plan_type: "standard" },
+      subscription: "sub_string_only",
+    });
+
+    const callArg = mockStorage.createSubscription.mock.calls[0][0];
+    expect(callArg.stripeSubscriptionId).toBe("sub_string_only");
+    const diff = callArg.endDate.getTime() - before;
+    expect(diff).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
+    expect(diff).toBeLessThan(31 * 24 * 60 * 60 * 1000);
+  });
+
+  // 説明：サブスク処理の前に既存サブスクのキャンセルが呼ばれること
+  // 条件：purchase_type = "subscription"（cancelSubscription は必ず呼ばれる）
+  it("サブスク処理前に cancelSubscription が querentId で呼ばれる", async () => {
+    await processStripeSession({
+      ...baseSession,
+      metadata: { querent_id: "42", purchase_type: "subscription", plan_type: "standard" },
+    });
+
+    expect(mockStorage.cancelSubscription).toHaveBeenCalledWith(42);
+  });
+
+  // 説明：metadata が null の場合は querentId が 0 になり not_paid を返すこと
+  // 条件：metadata = null
+  it("metadata=null のとき { status: 'not_paid' } を返す", async () => {
+    const result = await processStripeSession({
+      ...baseSession,
+      metadata: null,
+    });
+
+    expect(result).toEqual({ status: "not_paid" });
+  });
 });
