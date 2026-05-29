@@ -323,9 +323,14 @@ wss.on("connection", async (ws, req) => {
               const ftBonusProfile = await storage.getFortunetellerProfile(roomData.fortunetellerId);
               const ftBonusRank = ftBonusProfile?.rank || "NORMAL";
               const PREMIUM_HIGH_RANKS = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
-              const bonus = (subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftBonusRank)) ? 5000 : 2000;
-              subscriptionBonus = bonus;
-              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, bonus);
+              const PREMIUM_ONLY_RANKS_BONUS = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+              // standard プランはプラチナ+以上の占い師はサブスク対象外（相談者がポイント払い）→ボーナス不付与
+              const isSubEligibleForBonus = subPlanType === "premium" || !PREMIUM_ONLY_RANKS_BONUS.includes(ftBonusRank);
+              if (isSubEligibleForBonus) {
+                const bonus = (subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftBonusRank)) ? 5000 : 2000;
+                subscriptionBonus = bonus;
+                await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, bonus);
+              }
             }
           }
           if (category !== "treatment") {
@@ -376,6 +381,8 @@ wss.on("connection", async (ws, req) => {
                   ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
                   return;
                 }
+                // 相談者が払ったポイントを占い師の cashable に加算
+                await storage.addFortunetellerBonusCashable(roomData3.fortunetellerId, costPt);
               }
             }
           } else {
@@ -395,6 +402,8 @@ wss.on("connection", async (ws, req) => {
                 ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
                 return;
               }
+              // 相談者が払ったポイントを占い師の cashable に加算
+              await storage.addFortunetellerBonusCashable(roomData.fortunetellerId, costPt);
             }
           }
         }

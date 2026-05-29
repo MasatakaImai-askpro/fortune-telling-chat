@@ -324,6 +324,26 @@ async function buildWsTestServer(): Promise<WsTestContext> {
             isLocked = true;
             msgCategory = "treatment";
           }
+          // サブスク初回返信ボーナス（eligibility チェック付き）
+          const roomDataFt = await mockStorage.getRoom(roomId);
+          if (roomDataFt) {
+            const querentSub = await mockStorage.getActiveSubscription(roomDataFt.querentId);
+            if (querentSub) {
+              const hasReplied = await mockStorage.hasFortunetellerRepliedInRoom(roomId, roomDataFt.fortunetellerId, 30);
+              if (!hasReplied) {
+                const subPlanTypeFt = (querentSub as any).planType || "standard";
+                const ftBonusProfile = await mockStorage.getFortunetellerProfile(roomDataFt.fortunetellerId);
+                const ftBonusRank = ftBonusProfile?.rank || "NORMAL";
+                const PREMIUM_HIGH_RANKS_B = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+                const PREMIUM_ONLY_RANKS_B = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+                const isSubEligibleForBonus = subPlanTypeFt === "premium" || !PREMIUM_ONLY_RANKS_B.includes(ftBonusRank);
+                if (isSubEligibleForBonus) {
+                  const bonus = (subPlanTypeFt === "premium" && PREMIUM_HIGH_RANKS_B.includes(ftBonusRank)) ? 5000 : 2000;
+                  await mockStorage.addFortunetellerBonusCashable(roomDataFt.fortunetellerId, bonus);
+                }
+              }
+            }
+          }
         } else if (sender === "querent" && text) {
           const isValidFreeTemplate = isFree && SERVER_FREE_TEMPLATES.includes(text.trim());
           if (isValidFreeTemplate) {
@@ -356,6 +376,7 @@ async function buildWsTestServer(): Promise<WsTestContext> {
                   ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
                   return;
                 }
+                await mockStorage.addFortunetellerBonusCashable(roomData.fortunetellerId, costPt);
               }
             } else {
               const roomData = await mockStorage.getRoom(roomId);
@@ -370,6 +391,7 @@ async function buildWsTestServer(): Promise<WsTestContext> {
                   ws.send(JSON.stringify({ type: "error", message: "ポイントが不足しています。" }));
                   return;
                 }
+                await mockStorage.addFortunetellerBonusCashable(roomData.fortunetellerId, costPt);
               }
             }
           }
@@ -934,6 +956,10 @@ describe("WebSocket メッセージ処理", () => {
       costPt: 0,
       isLocked: false,
     });
+    mockStorage.addFortunetellerBonusCashable.mockResolvedValue(undefined);
+    mockStorage.hasFortunetellerRepliedInRoom.mockResolvedValue(true); // default: 返信済み→ボーナス発生しない
+    mockStorage.settleTreatmentMessagesInRoom.mockResolvedValue(0);
+    mockStorage.getActiveSubscription.mockResolvedValue(null);
   });
 
   it("未認証の接続 → コード 1008 で切断される", async () => {
@@ -1027,6 +1053,7 @@ describe("WebSocket メッセージ処理", () => {
     ws.terminate();
 
     expect(mockStorage.deductPoints).not.toHaveBeenCalled();
+    expect(mockStorage.addFortunetellerBonusCashable).not.toHaveBeenCalled();
     expect(mockStorage.createMessage).toHaveBeenCalledWith(
       expect.objectContaining({ costPt: 0, category: "free" })
     );
@@ -1060,6 +1087,7 @@ describe("WebSocket メッセージ処理", () => {
     ws.terminate();
 
     expect(mockStorage.deductPoints).toHaveBeenCalledWith(50, expectedCost);
+    expect(mockStorage.addFortunetellerBonusCashable).toHaveBeenCalledWith(7, expectedCost);
   });
 
   it("ポイント不足 → エラーメッセージが送信される・createMessage は呼ばれない", async () => {
@@ -1089,6 +1117,7 @@ describe("WebSocket メッセージ処理", () => {
     expect(errorMsg.type).toBe("error");
     expect(errorMsg.message).toMatch(/ポイントが不足/);
     expect(mockStorage.createMessage).not.toHaveBeenCalled();
+    expect(mockStorage.addFortunetellerBonusCashable).not.toHaveBeenCalled();
   });
 
   it("fortuneteller の length_paying → text.length * 2 で isLocked=true", async () => {
@@ -1218,5 +1247,116 @@ describe("WebSocket メッセージ処理", () => {
     ws.terminate();
 
     expect(mockStorage.deductPoints).toHaveBeenCalledWith(100, expectedCost);
+    expect(mockStorage.addFortunetellerBonusCashable).toHaveBeenCalledWith(12, expectedCost);
+  });
+
+  it("standard プラン × PLATINUM_PLUS → サブスク対象外のため querent がポイントを払い占い師の cashable に加算される", async () => {
+    const testText = "占いを聞かせてください";
+    const expectedCost = testText.length * RANK_MULT["PLATINUM_PLUS"];
+
+    mockStorage.getActiveSubscription.mockResolvedValue({ planType: "standard", startDate: new Date() });
+    mockStorage.getSubscriptionSlotAdvisors.mockResolvedValue([]);
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 13, querentId: 110 });
+    mockStorage.getFortunetellerProfile.mockResolvedValue({ rank: "PLATINUM_PLUS" });
+    mockStorage.deductPoints.mockResolvedValue(true);
+
+    const cookie = await getSessionCookie(110);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-std-plat", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "querent",
+        text: testText,
+        category: "length_paying",
+        free: false,
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 200));
+    ws.terminate();
+
+    expect(mockStorage.deductPoints).toHaveBeenCalledWith(110, expectedCost);
+    expect(mockStorage.addFortunetellerBonusCashable).toHaveBeenCalledWith(13, expectedCost);
+  });
+
+  it("fortuneteller 初回返信 × standard × GOLD → subscriptionBonus 2000pt が付与される", async () => {
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 14, querentId: 120 });
+    mockStorage.getActiveSubscription.mockResolvedValue({ planType: "standard", startDate: new Date() });
+    mockStorage.hasFortunetellerRepliedInRoom.mockResolvedValue(false);
+    mockStorage.getFortunetellerProfile.mockResolvedValue({ rank: "GOLD" });
+
+    const cookie = await getSessionCookie(120);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-ft-gold-bonus", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "fortuneteller",
+        text: "ご相談承ります",
+        category: "free",
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 150));
+    ws.terminate();
+
+    expect(mockStorage.addFortunetellerBonusCashable).toHaveBeenCalledWith(14, 2000);
+  });
+
+  it("fortuneteller 初回返信 × standard × PLATINUM_PLUS → サブスク対象外のためボーナス付与されない", async () => {
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 15, querentId: 130 });
+    mockStorage.getActiveSubscription.mockResolvedValue({ planType: "standard", startDate: new Date() });
+    mockStorage.hasFortunetellerRepliedInRoom.mockResolvedValue(false);
+    mockStorage.getFortunetellerProfile.mockResolvedValue({ rank: "PLATINUM_PLUS" });
+
+    const cookie = await getSessionCookie(130);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-ft-plat-no-bonus", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "fortuneteller",
+        text: "ご相談承ります",
+        category: "free",
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 150));
+    ws.terminate();
+
+    expect(mockStorage.addFortunetellerBonusCashable).not.toHaveBeenCalled();
+  });
+
+  it("fortuneteller 初回返信 × premium × PLATINUM_PLUS → subscriptionBonus 5000pt が付与される", async () => {
+    mockStorage.getRoom.mockResolvedValue({ fortunetellerId: 16, querentId: 140 });
+    mockStorage.getActiveSubscription.mockResolvedValue({ planType: "premium", startDate: new Date() });
+    mockStorage.hasFortunetellerRepliedInRoom.mockResolvedValue(false);
+    mockStorage.getFortunetellerProfile.mockResolvedValue({ rank: "PLATINUM_PLUS" });
+
+    const cookie = await getSessionCookie(140);
+    const { ws, ready, next } = wsConnectBuffered(ctx.port, "?room_id=room-ft-premium-plat", cookie);
+    await ready;
+    await next();
+
+    ws.send(
+      JSON.stringify({
+        type: "chat_message",
+        sender: "fortuneteller",
+        text: "ご相談承ります",
+        category: "free",
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 150));
+    ws.terminate();
+
+    expect(mockStorage.addFortunetellerBonusCashable).toHaveBeenCalledWith(16, 5000);
   });
 });
