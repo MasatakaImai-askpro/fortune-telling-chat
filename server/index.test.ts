@@ -891,29 +891,60 @@ describe("ポイント計算ロジック", () => {
 
   describe("サブスク初回返信ボーナス", () => {
     const PREMIUM_HIGH_RANKS = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
+    const PREMIUM_ONLY_RANKS_BONUS = ["PLATINUM_PLUS", "DIAMOND", "DIAMOND_PLUS"];
 
+    // isSubEligibleForBonus ゲートを含む完全なボーナス計算関数
+    function calcBonus(subPlanType: string, ftRank: string): number | null {
+      const isSubEligibleForBonus =
+        subPlanType === "premium" || !PREMIUM_ONLY_RANKS_BONUS.includes(ftRank);
+      if (!isSubEligibleForBonus) return null; // 対象外→ボーナスなし
+      return subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftRank) ? 5000 : 2000;
+    }
+
+    // premium プラン（PLATINUM_PLUS 以上は 5000pt、それ以外は 2000pt）
     it("premium × DIAMOND_PLUS ランク → ボーナス 5000pt", () => {
-      const subPlanType = "premium";
-      const ftRank = "DIAMOND_PLUS";
-      const bonus =
-        subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftRank) ? 5000 : 2000;
-      expect(bonus).toBe(5000);
+      expect(calcBonus("premium", "DIAMOND_PLUS")).toBe(5000);
     });
 
-    it("standard × DIAMOND_PLUS ランク → ボーナス 2000pt", () => {
-      const subPlanType = "standard";
-      const ftRank = "DIAMOND_PLUS";
-      const bonus =
-        subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftRank) ? 5000 : 2000;
-      expect(bonus).toBe(2000);
+    it("premium × DIAMOND ランク → ボーナス 5000pt", () => {
+      expect(calcBonus("premium", "DIAMOND")).toBe(5000);
+    });
+
+    it("premium × PLATINUM_PLUS ランク → ボーナス 5000pt", () => {
+      expect(calcBonus("premium", "PLATINUM_PLUS")).toBe(5000);
     });
 
     it("premium × GOLD ランク → ボーナス 2000pt", () => {
-      const subPlanType = "premium";
-      const ftRank = "GOLD";
-      const bonus =
-        subPlanType === "premium" && PREMIUM_HIGH_RANKS.includes(ftRank) ? 5000 : 2000;
-      expect(bonus).toBe(2000);
+      expect(calcBonus("premium", "GOLD")).toBe(2000);
+    });
+
+    it("premium × PLATINUM ランク → ボーナス 2000pt", () => {
+      expect(calcBonus("premium", "PLATINUM")).toBe(2000);
+    });
+
+    // standard プラン（PLATINUM_PLUS 以上はサブスク対象外→ボーナスなし、それ以外は 2000pt）
+    it("standard × DIAMOND_PLUS ランク → サブスク対象外のためボーナスなし", () => {
+      expect(calcBonus("standard", "DIAMOND_PLUS")).toBeNull();
+    });
+
+    it("standard × DIAMOND ランク → サブスク対象外のためボーナスなし", () => {
+      expect(calcBonus("standard", "DIAMOND")).toBeNull();
+    });
+
+    it("standard × PLATINUM_PLUS ランク → サブスク対象外のためボーナスなし", () => {
+      expect(calcBonus("standard", "PLATINUM_PLUS")).toBeNull();
+    });
+
+    it("standard × GOLD ランク → ボーナス 2000pt", () => {
+      expect(calcBonus("standard", "GOLD")).toBe(2000);
+    });
+
+    it("standard × PLATINUM ランク → ボーナス 2000pt", () => {
+      expect(calcBonus("standard", "PLATINUM")).toBe(2000);
+    });
+
+    it("standard × NORMAL ランク → ボーナス 2000pt", () => {
+      expect(calcBonus("standard", "NORMAL")).toBe(2000);
     });
   });
 });
