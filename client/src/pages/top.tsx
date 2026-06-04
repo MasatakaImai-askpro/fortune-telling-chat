@@ -1251,7 +1251,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
                 </div>
                 <div className="mt-2 text-2xl font-bold text-gray-900">20,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
                 <ul className="mt-2 space-y-1 text-xs text-gray-600">
-                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナランクまでの占い師を<b>5人まで</b>登録可能</li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>プラチナランクまでの占い師を<b>3人まで</b>登録可能</li>
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
                 </ul>
                 <button onClick={() => handleSubscribe("standard")} disabled={subLoading} data-testid="button-subscribe-standard"
@@ -1268,7 +1268,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
                 </div>
                 <div className="mt-2 text-2xl font-bold text-gray-900">50,000<span className="text-sm font-normal text-gray-600">円/30日</span></div>
                 <ul className="mt-2 space-y-1 text-xs text-gray-600">
-                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>ランク問わず占い師を<b>5人まで</b>登録可能</li>
+                  <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>ランク問わず占い師を<b>3人まで</b>登録可能</li>
                   <li className="flex items-start gap-1.5"><span className="text-emerald-500 mt-0.5">✓</span>チャットのポイント消費なし（30日間）</li>
                 </ul>
                 <button onClick={() => handleSubscribe("premium")} disabled={subLoading} data-testid="button-subscribe-premium"
@@ -1285,7 +1285,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               <span className="text-sm text-gray-700">残高: <b>{fmtPts(queInfo.point)}</b></span>
             </div>
             {queInfo.subscription && (
-              <div className="mt-2 text-xs text-emerald-600">サブスク中は最大5人の占い師と無料チャット（施術・6人目以降はポイント必要）</div>
+              <div className="mt-2 text-xs text-emerald-600">サブスク中は最大3人の占い師と無料チャット（施術・4人目以降はポイント必要）</div>
             )}
             <div className="mt-3 grid grid-cols-3 gap-2">
               {[500, 1000, 3000, 5000, 10000, 30000].map((y) => ({ yen: y, pt: Math.ceil(y / YEN_PER_POINT) })).map((opt) => (
