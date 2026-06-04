@@ -179,7 +179,7 @@ function Header({ user, loading, point, subscriptionActive, onGoPlan, onLogout }
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="text-lg font-bold tracking-wide text-gray-900" data-testid="text-app-title">
             <Sparkles className="w-5 h-5 inline-block mr-1 text-pink-600" />
-            結～むすび～よく当たる占い🔮
+            占いアプリ♡⃝結-むすび𓏲𝄢
           </div>
           {!loading && user && (
             <div className="flex items-center gap-3 flex-wrap">
@@ -1368,7 +1368,7 @@ function LoggedOutView() {
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="text-lg font-bold tracking-wide" data-testid="text-app-title">
-              <Sparkles className="w-5 h-5 inline-block mr-1 text-pink-600" />結～むすび～よく当たる占い🔮
+              <Sparkles className="w-5 h-5 inline-block mr-1 text-pink-600" />占いアプリ♡⃝結-むすび𓏲𝄢
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setLocation("/querent_login")} data-testid="button-querent-login"
