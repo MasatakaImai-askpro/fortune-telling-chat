@@ -360,7 +360,7 @@ wss.on("connection", async (ws, req) => {
             const advisorRank2 = ftSlotProfile?.rank || "NORMAL";
             const isEligibleForPlan = subPlanType2 === "premium" || !PREMIUM_ONLY_RANKS2.includes(advisorRank2);
             const isInSlot = advisorId ? slotAdvisors.includes(advisorId) : false;
-            const slotFull = slotAdvisors.length >= 5;
+            const slotFull = slotAdvisors.length >= 3;
             if (isEligibleForPlan && (isInSlot || (!slotFull && advisorId))) {
               costPt = 0;
               msgCategory = "free";

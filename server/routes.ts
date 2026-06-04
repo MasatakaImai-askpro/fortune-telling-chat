@@ -1365,10 +1365,10 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       const user = await storage.getUser(req.session.userId!);
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
       const activeSub = await storage.getActiveSubscription(user.id);
-      if (!activeSub) return res.json({ slot_advisor_ids: [], count: 0, max: 5 });
+      if (!activeSub) return res.json({ slot_advisor_ids: [], count: 0, max: 3 });
       const subStart = activeSub.startDate;
       const slotAdvisors = await storage.getSubscriptionSlotAdvisors(user.id, subStart);
-      res.json({ slot_advisor_ids: slotAdvisors, count: slotAdvisors.length, max: 5 });
+      res.json({ slot_advisor_ids: slotAdvisors, count: slotAdvisors.length, max: 3 });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
