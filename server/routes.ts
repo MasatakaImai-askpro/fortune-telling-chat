@@ -742,6 +742,11 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         partner_zodiac_sign: profile.partnerZodiacSign || "",
         partner_birthplace: profile.partnerBirthplace || "",
         partner_birthtime: profile.partnerBirthtime || "",
+        partner2_name: profile.partner2Name || "",
+        partner2_birthdate: profile.partner2Birthdate || "",
+        partner2_zodiac_sign: profile.partner2ZodiacSign || "",
+        partner2_birthplace: profile.partner2Birthplace || "",
+        partner2_birthtime: profile.partner2Birthtime || "",
         subscription: isSubActive,
         subscription_plan_type: activeSub ? (activeSub as any).planType || "standard" : null,
         subscription_end_date: activeSub ? activeSub.endDate.toISOString() : null,
@@ -764,6 +769,11 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
     partner_zodiac_sign: z.string().optional().default(""),
     partner_birthplace: z.string().optional().default(""),
     partner_birthtime: z.string().optional().default(""),
+    partner2_name: z.string().max(20).optional().default(""),
+    partner2_birthdate: z.string().optional().default(""),
+    partner2_zodiac_sign: z.string().optional().default(""),
+    partner2_birthplace: z.string().optional().default(""),
+    partner2_birthtime: z.string().optional().default(""),
   });
 
   app.post("/api/edit_querent_karte", requireAuth, async (req: Request, res: Response) => {
@@ -778,6 +788,9 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
         partnerName: parsed.partner_name, partnerBirthdate: parsed.partner_birthdate,
         partnerZodiacSign: parsed.partner_zodiac_sign, partnerBirthplace: parsed.partner_birthplace,
         partnerBirthtime: parsed.partner_birthtime,
+        partner2Name: parsed.partner2_name, partner2Birthdate: parsed.partner2_birthdate,
+        partner2ZodiacSign: parsed.partner2_zodiac_sign, partner2Birthplace: parsed.partner2_birthplace,
+        partner2Birthtime: parsed.partner2_birthtime,
       });
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });

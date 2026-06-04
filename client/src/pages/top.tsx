@@ -1334,7 +1334,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               hint={`${(queInfo.worry_message || "").length}/1000`} />
           </div>
           <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
-            <h2 className="text-base font-semibold text-gray-900">お相手の情報</h2>
+            <h2 className="text-base font-semibold text-gray-900">お相手の情報（１人目）</h2>
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2">
                 <Input label="お相手のお名前" value={queInfo.partner_name || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_name: v })} placeholder="例: 田中太郎" />
@@ -1343,6 +1343,18 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
               <Input label="お相手の星座" value={queInfo.partner_zodiac_sign || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_zodiac_sign: v })} placeholder="例: みずがめ座" />
               <Input label="お相手の出生地" value={queInfo.partner_birthplace || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_birthplace: v })} />
               <Input label="お相手の出生時間" value={queInfo.partner_birthtime || ""} onChange={(v) => setQueInfo({ ...queInfo, partner_birthtime: v })} placeholder="例: 09:15" />
+            </div>
+          </div>
+          <div className="bg-white border border-pink-200 rounded-2xl p-4 space-y-3">
+            <h2 className="text-base font-semibold text-gray-900">お相手の情報（２人目）</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Input label="お相手のお名前" value={queInfo.partner2_name || ""} onChange={(v) => setQueInfo({ ...queInfo, partner2_name: v })} placeholder="例: 鈴木花子" />
+              </div>
+              <Input label="お相手の生年月日" value={queInfo.partner2_birthdate || ""} onChange={(v) => setQueInfo({ ...queInfo, partner2_birthdate: v })} placeholder="YYYY-MM-DD" />
+              <Input label="お相手の星座" value={queInfo.partner2_zodiac_sign || ""} onChange={(v) => setQueInfo({ ...queInfo, partner2_zodiac_sign: v })} placeholder="例: おとめ座" />
+              <Input label="お相手の出生地" value={queInfo.partner2_birthplace || ""} onChange={(v) => setQueInfo({ ...queInfo, partner2_birthplace: v })} />
+              <Input label="お相手の出生時間" value={queInfo.partner2_birthtime || ""} onChange={(v) => setQueInfo({ ...queInfo, partner2_birthtime: v })} placeholder="例: 09:15" />
             </div>
           </div>
           <div className="text-right text-xs text-gray-500">保存は自動です</div>
