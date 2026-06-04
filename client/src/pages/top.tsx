@@ -178,8 +178,8 @@ function Header({ user, loading, point, subscriptionActive, onGoPlan, onLogout }
       <div className="max-w-2xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="text-lg font-bold tracking-wide text-gray-900" data-testid="text-app-title">
-            <Sparkles className="w-5 h-5 inline-block mr-1 text-pink-600" />
-            <span style={{ color: '#f88cd1' }}>良縁成就</span><span style={{ color: '#ef8acb' }}>♡⃝</span><span style={{ color: '#de78b9' }}>結-むすび𓏲𝄢</span>
+            <Sparkles className="w-5 h-5 inline-block mr-1" style={{ color: '#f88cd1' }} />
+            良縁成就<span style={{ color: '#ef8acb' }}>♡⃝</span>結-むすび<span style={{ color: '#de78b9' }}>𓏲𝄢</span>
           </div>
           {!loading && user && (
             <div className="flex items-center gap-3 flex-wrap">
@@ -1368,7 +1368,7 @@ function LoggedOutView() {
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="text-lg font-bold tracking-wide" data-testid="text-app-title">
-              <Sparkles className="w-5 h-5 inline-block mr-1 text-pink-600" /><span style={{ color: '#f88cd1' }}>良縁成就</span><span style={{ color: '#ef8acb' }}>♡⃝</span><span style={{ color: '#de78b9' }}>結-むすび𓏲𝄢</span>
+              <Sparkles className="w-5 h-5 inline-block mr-1" style={{ color: '#f88cd1' }} />良縁成就<span style={{ color: '#ef8acb' }}>♡⃝</span>結-むすび<span style={{ color: '#de78b9' }}>𓏲𝄢</span>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setLocation("/querent_login")} data-testid="button-querent-login"
