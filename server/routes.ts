@@ -322,7 +322,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   app.post("/api/register_querent", async (req: Request, res: Response) => {
     try {
-      const { email, password, name, address, birthdate, zodiac_sign, birthplace, birthtime, worry_category, worry_message } = req.body;
+      const { email, password, name, birthdate, zodiac_sign, birthplace, birthtime, worry_category, worry_message } = req.body;
       if (!email || !password) {
         return res.status(400).json({ error: "必須フィールドが不足しています" });
       }
@@ -335,7 +335,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       await storage.createQuerentProfile({
         userId: user.id,
         name: name || "",
-        address: address || "",
         birthdate: birthdate || "",
         zodiacSign: zodiac_sign || "",
         birthplace: birthplace || "",
@@ -730,7 +729,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       res.json({
         name: profile.name,
         email: user.email,
-        address: profile.address,
         birthdate: profile.birthdate,
         zodiac_sign: profile.zodiacSign,
         birthplace: profile.birthplace,
@@ -802,7 +800,6 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
 
   const infoSchema = z.object({
     name: z.string().max(20).optional(),
-    address: z.string().max(255).optional(),
   });
 
   app.post("/api/edit_querent_info", requireAuth, async (req: Request, res: Response) => {
@@ -811,7 +808,7 @@ export function registerRoutes(app: Express, broadcast?: (roomId: string, data: 
       if (!user || user.role !== "1") return res.status(403).json({ error: "権限がありません" });
       const parsed = infoSchema.parse(req.body);
       const updated = await storage.updateQuerentProfile(user.id, {
-        name: parsed.name, address: parsed.address,
+        name: parsed.name,
       });
       if (!updated) return res.status(400).json({ error: "更新に失敗しました" });
       res.json({ message: "更新しました" });

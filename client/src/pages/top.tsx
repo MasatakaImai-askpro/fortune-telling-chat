@@ -103,7 +103,6 @@ type ThreadsMap = Record<number, Thread>;
 type QuerentInfo = {
   name: string;
   email: string;
-  address: string;
   birthdate: string;
   zodiac_sign: string;
   birthplace: string;
@@ -1108,7 +1107,7 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
     try {
       setSubmitting(true); setSubmitMsg(null);
       await apiRequest("POST", "/api/edit_querent_info", {
-        name: queInfo.name, address: queInfo.address,
+        name: queInfo.name,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/get_querent_info"] });
       setSubmitMsg("更新しました");
@@ -1305,7 +1304,6 @@ function Account({ queInfoFromQuery }: { queInfoFromQuery: QuerentInfo | null })
           <h2 className="text-lg font-semibold text-gray-900">登録情報</h2>
           <Input label="名前" value={queInfo.name} onChange={(v) => setQueInfo({ ...queInfo, name: v })} />
           <Input label="メールアドレス" value={queInfo.email} onChange={(v) => setQueInfo({ ...queInfo, email: v })} type="email" />
-          <Input label="住所" value={queInfo.address} onChange={(v) => setQueInfo({ ...queInfo, address: v })} />
           <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
             <div className="text-xs text-gray-600">
               {submitMsg && <span className="text-green-600">{submitMsg}</span>}

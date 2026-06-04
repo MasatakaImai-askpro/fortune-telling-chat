@@ -34,7 +34,6 @@ export const fortunetellerProfiles = pgTable("fortuneteller_profiles", {
 export const querentProfiles = pgTable("querent_profiles", {
   userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 20 }).notNull(),
-  address: varchar("address", { length: 255 }).notNull().default(""),
   birthdate: varchar("birthdate", { length: 10 }).notNull(),
   zodiacSign: varchar("zodiac_sign", { length: 10 }).notNull(),
   birthplace: varchar("birthplace", { length: 50 }).notNull(),
