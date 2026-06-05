@@ -446,12 +446,12 @@ const isValidJapaneseText = (text: string) => text.trim() === "" || FULLWIDTH_RE
 
 function getQuerentBubbleColor(m: ChatMessage): string {
   if (m.sender === "querent") {
-    if (m.free || m.category === "free") return "bg-emerald-600";
+    if (m.free || m.category === "free") return "bg-pink-400";
     return "bg-gradient-to-br from-pink-500 to-pink-600";
   }
-  if (m.category === "treatment") return "bg-amber-50 border border-amber-200";
+  if (m.category === "treatment") return "bg-rose-50 border border-rose-200";
   if (m.category === "length_paying") return "bg-pink-50 border border-pink-200";
-  return "bg-gray-100 border border-pink-200";
+  return "bg-pink-50 border border-pink-200";
 }
 
 type RoomInfo = {
@@ -491,7 +491,7 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
   return (
     <div className="bg-white rounded-2xl border border-pink-200 overflow-hidden">
       {slotData && slotData.count > 0 && (
-        <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-100 text-[10px] text-emerald-700">
+        <div className="px-4 py-2 bg-pink-50 border-b border-pink-100 text-[10px] text-pink-700">
           サブスク無料チャット: {slotData.count}/{slotData.max}人のアドバイザーと使用中
         </div>
       )}
@@ -514,7 +514,7 @@ function ChatRoomList({ onSelectAdvisor, advisors }: { onSelectAdvisor: (advisor
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-semibold text-sm text-gray-900 truncate">{room.fortuneteller_name}</span>
                   {isSlotAdvisor && (slotData?.count ?? 0) > 0 && (
-                    <span className="flex-shrink-0 text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5 font-semibold leading-none">
+                    <span className="flex-shrink-0 text-[9px] bg-pink-100 text-pink-700 border border-pink-200 rounded-full px-1.5 py-0.5 font-semibold leading-none">
                       サブスク無料
                     </span>
                   )}
@@ -783,7 +783,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
             <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
               <Ribbon rank={advisor.rank} />
               {plan === "subscription" && subscriptionActive && (
-                <span className="text-emerald-600">月額内で使い放題</span>
+                <span className="text-pink-600">月額内で使い放題</span>
               )}
             </div>
           </button>
@@ -816,7 +816,7 @@ function Chat({ plan, points, setPoints, subscriptionActive, advisor, thread, se
                       <button
                         onClick={() => unlockTreatment(String(m.id), m.cost_pt ?? 0, m.category)}
                         disabled={unlockingId === String(m.id)}
-                        className="text-[11px] bg-amber-500 text-gray-900 font-semibold px-3 py-1 rounded-lg hover-elevate active-elevate-2 disabled:opacity-50"
+                        className="text-[11px] bg-pink-500 text-white font-semibold px-3 py-1 rounded-lg hover-elevate active-elevate-2 disabled:opacity-50"
                         data-testid={`button-unlock-${m.id}`}
                       >
                         {unlockingId === String(m.id) ? "開封中..." : isSub ? "開封する（サブスク会員無料）" : `開封する（${m.cost_pt ?? 0}pt消費）`}
