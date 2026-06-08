@@ -176,7 +176,7 @@ function Header({ user, loading, point, subscriptionActive, onGoPlan, onLogout }
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-pink-200">
       <div className="max-w-2xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="text-sm font-bold tracking-wide text-gray-900" data-testid="text-app-title">
+          <div className="text-[16px] font-bold tracking-wide text-gray-900" data-testid="text-app-title">
             <span style={{ color: '#90b9da' }}>༺</span>⛩️🎀<span style={{ color: '#ed7db0' }}>♡</span> 良縁成就 <span style={{ color: '#ed7db0' }}>♡</span> 結 -むすび-<span style={{ color: '#ed7db0' }}>♡</span>🎀⛩️<span style={{ color: '#90b9da' }}>༻</span>
           </div>
           {!loading && user && (
@@ -1376,7 +1376,7 @@ function LoggedOutView() {
       <header className="sticky top-0 z-30 bg-white border-b border-pink-200">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="text-sm font-bold tracking-wide" data-testid="text-app-title">
+            <div className="text-[16px] font-bold tracking-wide" data-testid="text-app-title">
               <span style={{ color: '#90b9da' }}>༺</span>⛩️🎀<span style={{ color: '#ed7db0' }}>♡</span> 良縁成就 <span style={{ color: '#ed7db0' }}>♡</span> 結 -むすび-<span style={{ color: '#ed7db0' }}>♡</span>🎀⛩️<span style={{ color: '#90b9da' }}>༻</span>
             </div>
             <div className="flex items-center gap-2">
